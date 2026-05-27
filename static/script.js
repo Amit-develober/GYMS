@@ -252,3 +252,155 @@ function toggleCustomCategory() {
         customInput.value = '';
     }
 }
+
+// Chart.js Initializations
+document.addEventListener("DOMContentLoaded", () => {
+    // Dashboard: Attendance Trend Chart
+    const attendanceCtx = document.getElementById('attendanceChart');
+    if (attendanceCtx) {
+        initAttendanceChart(attendanceCtx);
+    }
+    
+    // Dashboard: Financial Overview Chart
+    const financialCtx = document.getElementById('financialChart');
+    if (financialCtx) {
+        initFinancialChart(financialCtx);
+    }
+
+    // Expenses: Category Breakdown Chart
+    const expenseCtx = document.getElementById('expenseCategoryChart');
+    if (expenseCtx) {
+        initExpenseChart(expenseCtx);
+    }
+});
+
+function initAttendanceChart(ctx) {
+    const dates = window.attendanceTrendDates || [];
+    const counts = window.attendanceTrendCounts || [];
+    
+    new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: dates,
+            datasets: [{
+                label: 'Attendance Count',
+                data: counts,
+                borderColor: '#ff6b00', // var(--primary) HSL 24
+                backgroundColor: 'rgba(255, 107, 0, 0.1)',
+                borderWidth: 3,
+                tension: 0.4,
+                fill: true,
+                pointBackgroundColor: '#ff6b00',
+                pointBorderColor: '#ffffff',
+                pointHoverRadius: 7,
+                pointHoverBackgroundColor: '#ff6b00',
+                pointHoverBorderColor: '#ffffff'
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: { display: false }
+            },
+            scales: {
+                y: {
+                    grid: { color: 'rgba(255, 255, 255, 0.04)' },
+                    ticks: { color: '#8b949e', stepSize: 1 }
+                },
+                x: {
+                    grid: { display: false },
+                    ticks: { color: '#8b949e' }
+                }
+            }
+        }
+    });
+}
+
+function initFinancialChart(ctx) {
+    const rev = window.totalRevenue || 0;
+    const exp = window.totalExpenses || 0;
+    const pend = window.pendingFeesAmount || 0;
+    
+    new Chart(ctx, {
+        type: 'doughnut',
+        data: {
+            labels: ['Collected Revenue', 'Expenses', 'Pending Fees'],
+            datasets: [{
+                data: [rev, exp, pend],
+                backgroundColor: [
+                    '#10b981', // green / success HSL 145
+                    '#ef4444', // red / danger HSL 354
+                    '#f59e0b'  // amber / pending HSL 42
+                ],
+                borderWidth: 2,
+                borderColor: '#141a26',
+                hoverOffset: 6
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    position: 'bottom',
+                    labels: {
+                        color: '#e6edf3',
+                        padding: 15,
+                        font: { family: 'Outfit', size: 12 }
+                    }
+                }
+            },
+            cutout: '70%'
+        }
+    });
+}
+
+function initExpenseChart(ctx) {
+    const categories = window.expenseCategories || [];
+    const totals = window.expenseCategoryTotals || [];
+    
+    if (categories.length === 0) {
+        ctx.parentElement.innerHTML = '<p class="empty-msg">No expense data to display</p>';
+        return;
+    }
+    
+    const colors = [
+        '#00e1ff', // Cyan
+        '#ff6b00', // Orange
+        '#a855f7', // Purple
+        '#3b82f6', // Blue
+        '#eab308', // Yellow
+        '#ec4899'  // Pink
+    ];
+    
+    new Chart(ctx, {
+        type: 'doughnut',
+        data: {
+            labels: categories,
+            datasets: [{
+                data: totals,
+                backgroundColor: colors.slice(0, categories.length),
+                borderWidth: 2,
+                borderColor: '#141a26',
+                hoverOffset: 6
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    position: 'bottom',
+                    labels: {
+                        color: '#e6edf3',
+                        padding: 15,
+                        font: { family: 'Outfit', size: 12 }
+                    }
+                }
+            },
+            cutout: '70%'
+        }
+    });
+}
+

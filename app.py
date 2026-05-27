@@ -28,20 +28,17 @@ def check_and_create_fees(owner_id):
     """Ensure all active students have a fee record for the current month."""
     current_month = datetime.now().strftime('%Y-%m')
     conn = get_db_connection()
-    # Find active students who don't have a fee record for the current month
-    missing_fees = conn.execute('''
-        SELECT s.id, s.monthly_fee 
-        FROM students s 
+    # Bulk insert missing fees in a single database round-trip
+    conn.execute('''
+        INSERT INTO fees (owner_id, student_id, month, amount, status)
+        SELECT s.owner_id, s.id, ?, s.monthly_fee, 'PENDING'
+        FROM students s
         LEFT JOIN fees f ON s.id = f.student_id AND f.month = ?
         WHERE s.owner_id = ? AND s.is_active = 1 AND f.id IS NULL
-    ''', (current_month, owner_id)).fetchall()
-    
-    for student in missing_fees:
-        conn.execute('INSERT INTO fees (owner_id, student_id, month, amount, status) VALUES (?, ?, ?, ?, "PENDING")',
-                    (owner_id, student['id'], current_month, student['monthly_fee']))
-    
+    ''', (current_month, current_month, owner_id))
     conn.commit()
     conn.close()
+
 
 @app.context_processor
 def inject_now():
@@ -286,7 +283,33 @@ def dashboard():
     total_expenses = conn.execute("SELECT SUM(amount) FROM expenses WHERE owner_id = ? AND strftime('%Y-%m', date) = ?",
                                 (owner_id, current_month)).fetchone()[0] or 0
     
+    # Net profit calculation
     net_profit = total_revenue - total_expenses
+    
+    # Total Pending Fees Amount for current month
+    pending_fees_amount = conn.execute('SELECT SUM(amount) FROM fees WHERE owner_id = ? AND status = "PENDING" AND month = ?',
+                                      (owner_id, current_month)).fetchone()[0] or 0
+    
+    # 7-Day Attendance Trend
+    start_date = (datetime.now() - timedelta(days=6)).strftime('%Y-%m-%d')
+    attendance_data = conn.execute('''
+        SELECT date, COUNT(*) 
+        FROM attendance 
+        WHERE owner_id = ? AND date >= ?
+        GROUP BY date
+    ''', (owner_id, start_date)).fetchall()
+    
+    attendance_map = {row[0]: row[1] for row in attendance_data}
+    
+    attendance_trend_dates = []
+    attendance_trend_counts = []
+    for i in range(6, -1, -1):
+        date_obj = datetime.now() - timedelta(days=i)
+        date_str = date_obj.strftime('%Y-%m-%d')
+        display_date = date_obj.strftime('%a %d')
+        attendance_trend_dates.append(display_date)
+        attendance_trend_counts.append(attendance_map.get(date_str, 0))
+
     
     # Pending Fees Table for current month
     pending_list = conn.execute('''
@@ -303,11 +326,15 @@ def dashboard():
                            monthly_count=monthly_count, 
                            total_enrolled=total_enrolled, 
                            pending_fees_count=pending_fees_count,
+                           pending_fees_amount=pending_fees_amount,
                            total_revenue=total_revenue,
                            total_expenses=total_expenses,
                            net_profit=net_profit,
                            pending_list=pending_list,
+                           attendance_trend_dates=attendance_trend_dates,
+                           attendance_trend_counts=attendance_trend_counts,
                            current_month_name=datetime.now().strftime('%B %Y'))
+
 
 @app.route('/expenses')
 def expenses():
@@ -323,12 +350,26 @@ def expenses():
     monthly_expenses = conn.execute("SELECT SUM(amount) FROM expenses WHERE owner_id = ? AND strftime('%Y-%m', date) = ?",
                                    (owner_id, current_month)).fetchone()[0] or 0
     
+    # Expense category breakdown for current month
+    category_data = conn.execute('''
+        SELECT IFNULL(category, 'Other') as cat, SUM(amount) as total 
+        FROM expenses 
+        WHERE owner_id = ? AND strftime('%Y-%m', date) = ?
+        GROUP BY cat
+    ''', (owner_id, current_month)).fetchall()
+    
+    expense_categories = [row['cat'] for row in category_data]
+    expense_category_totals = [row['total'] for row in category_data]
+    
     conn.close()
     
     return render_template('expenses.html', 
                            expenses=expenses_list, 
                            monthly_expenses=monthly_expenses,
+                           expense_categories=expense_categories,
+                           expense_category_totals=expense_category_totals,
                            current_month_name=datetime.now().strftime('%B %Y'))
+
 
 @app.route('/expenses/add', methods=['POST'])
 def add_expense():
@@ -507,6 +548,39 @@ def toggle_status():
     conn.commit()
     conn.close()
     return jsonify({'success': True})
+
+@app.route('/change-password', methods=['GET', 'POST'])
+def change_password():
+    if not is_logged_in():
+        return redirect(url_for('login'))
+
+    if request.method == 'POST':
+        current_password = request.form.get('current_password')
+        new_password = request.form.get('new_password')
+        confirm_password = request.form.get('confirm_password')
+
+        if not all([current_password, new_password, confirm_password]):
+            flash('All fields are required.', 'error')
+        elif new_password != confirm_password:
+            flash('New passwords do not match.', 'error')
+        elif len(new_password) < 6:
+            flash('New password must be at least 6 characters.', 'error')
+        else:
+            owner_id = session['owner_id']
+            conn = get_db_connection()
+            owner = conn.execute('SELECT * FROM owners WHERE id = ?', (owner_id,)).fetchone()
+            if owner and bcrypt.check_password_hash(owner['password_hash'], current_password):
+                new_hash = bcrypt.generate_password_hash(new_password).decode('utf-8')
+                conn.execute('UPDATE owners SET password_hash = ? WHERE id = ?', (new_hash, owner_id))
+                conn.commit()
+                conn.close()
+                flash('Password changed successfully!', 'success')
+                return redirect(url_for('change_password'))
+            else:
+                conn.close()
+                flash('Current password is incorrect.', 'error')
+
+    return render_template('change_password.html')
 
 @app.route('/about')
 def about():

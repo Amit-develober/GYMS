@@ -6,7 +6,9 @@
     <title>GymPro — Today Management</title>
     <meta name="csrf-token" content="{{ csrf_token() }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
-    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600;700&display=swap" rel="stylesheet">
+    <link rel="icon" type="image/png" href="{{ url_for('static', filename='favicon.png') }}">
+    <link rel="shortcut icon" type="image/png" href="{{ url_for('static', filename='favicon.png') }}">
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=Montserrat:wght@400;600;700;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
 </head>
 <body>
@@ -22,6 +24,7 @@
             <a href="{{ url_for('about') }}" class="nav-link">About</a>
         </div>
         <div class="nav-right">
+            <a href="{{ url_for('change_password') }}" class="nav-link" style="font-size:0.82rem;"><i class="fas fa-key"></i> Password</a>
             <a href="{{ url_for('logout') }}" class="logout-btn"><i class="fas fa-sign-out-alt"></i> Logout</a>
         </div>
     </nav>
@@ -29,25 +32,25 @@
     <main class="container">
         <div class="page-header">
             <h2>Today's Attendance</h2>
-            <p class="current-date">{{ today_display }}</p>
+            <p class="current-date"><i class="far fa-calendar-alt"></i> {{ today_display }}</p>
         </div>
 
         {% with messages = get_flashed_messages(with_categories=true) %}
             {% if messages %}
                 {% for category, message in messages %}
-                    <div class="alert alert-{{ category }}">{{ message }}</div>
+                    <div class="alert alert-{{ category }}">
+                        <i class="fas fa-exclamation-circle"></i>
+                        <span>{{ message }}</span>
+                    </div>
                 {% endfor %}
             {% endif %}
         {% endwith %}
 
+        <!-- Mark Attendance Inline Form -->
         <section class="form-section">
-            <div class="section-header">
-                <h3>Mark Attendance</h3>
-            </div>
-            <form action="{{ url_for('add_attendance') }}" method="POST" class="inline-form">
-                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                <div class="form-group">
-                    <label for="student_id">Select Student</label>
+            <div class="glass-panel inline-form">
+                <div class="form-group" style="flex: 2; min-width: 250px;">
+                    <label for="student_id"><i class="fas fa-user"></i> Select Student</label>
                     <select name="student_id" id="student_id" required>
                         <option value="" disabled selected>Choose student...</option>
                         {% for student in students %}
@@ -55,23 +58,30 @@
                         {% endfor %}
                     </select>
                 </div>
-                <div class="form-group">
-                    <label for="entry_time">Entry Time</label>
-                    <input type="time" name="entry_time" id="entry_time" required>
-                </div>
-                <div class="form-group">
-                    <label for="exit_time">Exit Time (Optional)</label>
-                    <input type="time" name="exit_time" id="exit_time">
-                </div>
-                <button type="submit" class="btn-primary">Mark Entry</button>
-            </form>
+                <form action="{{ url_for('add_attendance') }}" method="POST" style="display: contents;">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <!-- Re-map the selected student into this form via JS before submit, or submit directly using input wrapper -->
+                    <input type="hidden" name="student_id" id="form-student-id">
+                    
+                    <div class="form-group">
+                        <label for="entry_time"><i class="fas fa-sign-in-alt"></i> Entry Time</label>
+                        <input type="time" name="entry_time" id="entry_time" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="exit_time"><i class="fas fa-sign-out-alt"></i> Exit Time <small style="color: var(--text-muted);">(Optional)</small></label>
+                        <input type="time" name="exit_time" id="exit_time">
+                    </div>
+                    <button type="submit" class="btn-primary" onclick="syncStudentId(event)">Mark Entry <i class="fas fa-plus"></i></button>
+                </form>
+            </div>
         </section>
 
+        <!-- Attendance Table -->
         <section class="table-section">
             <div class="section-header">
-                <h3>Attendance List</h3>
+                <h3>Daily Check-ins</h3>
             </div>
-            <div class="table-container">
+            <div class="table-container glass-panel">
                 <table>
                     <thead>
                         <tr>
@@ -82,15 +92,15 @@
                             <th>Fee Status</th>
                             <th>Report</th>
                         </tr>
-                        </thead>
-                        <tbody>
+                    </thead>
+                    <tbody>
                         {% for record in attendance_records %}
                         <tr>
-                            <td>{{ record.name }}</td>
+                            <td style="font-weight: 600;">{{ record.name }}</td>
                             <td>{{ record.mobile }}</td>
-                            <td>{{ record.entry_time }}</td>
+                            <td><span style="font-weight: 700; color: var(--secondary);">{{ record.entry_time }}</span></td>
                             <td class="exit-cell" data-id="{{ record.id }}">
-                                <span class="time-val">{{ record.exit_time or '—' }}</span>
+                                <span class="time-val" style="font-weight: 700; color: var(--primary);">{{ record.exit_time or '—' }}</span>
                                 <button class="edit-btn" onclick="editExitTime(this)"><i class="fas fa-edit"></i></button>
                             </td>
                             <td>
@@ -124,6 +134,17 @@
         const now = new Date();
         const time = now.getHours().toString().padStart(2, '0') + ':' + now.getMinutes().toString().padStart(2, '0');
         document.getElementById('entry_time').value = time;
+
+        // Form student ID syncing
+        function syncStudentId(event) {
+            const selectVal = document.getElementById('student_id').value;
+            if (!selectVal) {
+                alert("Please select a student first!");
+                event.preventDefault();
+                return;
+            }
+            document.getElementById('form-student-id').value = selectVal;
+        }
     </script>
 </body>
 </html>

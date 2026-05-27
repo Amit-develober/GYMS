@@ -6,8 +6,12 @@
     <title>GymPro — Dashboard</title>
     <meta name="csrf-token" content="{{ csrf_token() }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
-    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600;700&display=swap" rel="stylesheet">
+    <link rel="icon" type="image/png" href="{{ url_for('static', filename='favicon.png') }}">
+    <link rel="shortcut icon" type="image/png" href="{{ url_for('static', filename='favicon.png') }}">
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=Montserrat:wght@400;600;700;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <!-- Chart.js CDN for graphics -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 <body>
     <nav class="navbar">
@@ -22,80 +26,121 @@
             <a href="{{ url_for('about') }}" class="nav-link">About</a>
         </div>
         <div class="nav-right">
+            <a href="{{ url_for('change_password') }}" class="nav-link" style="font-size:0.82rem;"><i class="fas fa-key"></i> Password</a>
             <a href="{{ url_for('logout') }}" class="logout-btn"><i class="fas fa-sign-out-alt"></i> Logout</a>
         </div>
     </nav>
 
     <main class="container">
-        <div class="dashboard-header">
+        <div class="dashboard-header animate-fade-in">
             <h2>Welcome Back, {{ session['owner_name'] }}</h2>
-            <p>Here's what's happening in your gym today.</p>
+            <p>Gym administration & real-time analytics hub.</p>
         </div>
 
+        <!-- Metrics Grid -->
         <div class="stats-grid">
-            <div class="stat-card">
-                <div class="stat-icon"><i class="fas fa-calendar-check"></i></div>
-                <div class="stat-info">
+            <div class="stat-card glass-panel">
+                <div class="stat-card-left">
+                    <span>Today's Students</span>
                     <h3 id="today-students-count">{{ today_count }}</h3>
-                    <p>Today's Students</p>
+                </div>
+                <div class="stat-icon-wrapper">
+                    <i class="fas fa-calendar-check"></i>
                 </div>
             </div>
-            <div class="stat-card">
-                <div class="stat-icon"><i class="fas fa-users"></i></div>
-                <div class="stat-info">
+            <div class="stat-card glass-panel">
+                <div class="stat-card-left">
+                    <span>Monthly Students</span>
                     <h3 id="monthly-students-count">{{ monthly_count }}</h3>
-                    <p>Monthly Students</p>
+                </div>
+                <div class="stat-icon-wrapper">
+                    <i class="fas fa-users"></i>
                 </div>
             </div>
-            <div class="stat-card">
-                <div class="stat-icon"><i class="fas fa-address-book"></i></div>
-                <div class="stat-info">
+            <div class="stat-card glass-panel">
+                <div class="stat-card-left">
+                    <span>Total Enrolled</span>
                     <h3 id="total-enrolled-count">{{ total_enrolled }}</h3>
-                    <p>Total Enrolled</p>
+                </div>
+                <div class="stat-icon-wrapper">
+                    <i class="fas fa-address-book"></i>
                 </div>
             </div>
-            <div class="stat-card clickable" id="pending-fees-card" onclick="openPendingFeesModal()">
-                <div class="stat-icon"><i class="fas fa-money-bill-wave"></i></div>
-                <div class="stat-info">
-                    <h3 id="pending-fees-count-badge">{{ pending_fees_count }}</h3>
-                    <p>Pending Fees</p>
+            <div class="stat-card glass-panel clickable" id="pending-fees-card" onclick="openPendingFeesModal()">
+                <div class="stat-card-left">
+                    <span>Pending Fees</span>
+                    <h3 id="pending-fees-count-badge" style="color: var(--secondary);">{{ pending_fees_count }}</h3>
                 </div>
-                <div class="click-hint">Click to view <i class="fas fa-arrow-right"></i></div>
-            </div>
-        </div>
-
-        <div class="section-header mt-20">
-            <h3>Financial Overview — {{ current_month_name }}</h3>
-        </div>
-        <div class="stats-grid">
-            <div class="stat-card">
-                <div class="stat-icon"><i class="fas fa-chart-line text-success"></i></div>
-                <div class="stat-info">
-                    <h3>₹{{ total_revenue }}</h3>
-                    <p>Total Revenue</p>
+                <div class="stat-icon-wrapper">
+                    <i class="fas fa-money-bill-wave"></i>
                 </div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-icon"><i class="fas fa-file-invoice-dollar text-danger"></i></div>
-                <div class="stat-info">
-                    <h3>₹{{ total_expenses }}</h3>
-                    <p>Total Expenses</p>
-                </div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-icon"><i class="fas fa-wallet {{ 'text-success' if net_profit >= 0 else 'text-danger' }}"></i></div>
-                <div class="stat-info">
-                    <h3>₹{{ net_profit }}</h3>
-                    <p>Net Profit</p>
-                </div>
+                <div class="click-hint">View details <i class="fas fa-arrow-right"></i></div>
             </div>
         </div>
 
+        <!-- Charts Grid Section -->
+        <div class="dashboard-row">
+            <!-- Line Chart: Weekly Attendance Trend -->
+            <div class="chart-card glass-panel">
+                <div class="chart-card-header">
+                    <h3><i class="fas fa-chart-line"></i> Weekly Attendance Trend</h3>
+                </div>
+                <div class="chart-wrapper">
+                    <canvas id="attendanceChart"></canvas>
+                </div>
+            </div>
+
+            <!-- Doughnut Chart: Monthly Financial Breakdown -->
+            <div class="chart-card glass-panel">
+                <div class="chart-card-header">
+                    <h3><i class="fas fa-chart-pie"></i> Financials — {{ current_month_name }}</h3>
+                </div>
+                <div class="chart-wrapper">
+                    <canvas id="financialChart"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <!-- Financial Overview Text Metrics -->
+        <div class="section-header">
+            <h3>Monthly Ledger — {{ current_month_name }}</h3>
+        </div>
+        <div class="stats-grid" style="margin-bottom: 40px;">
+            <div class="stat-card glass-panel">
+                <div class="stat-card-left">
+                    <span>Total Revenue Collected</span>
+                    <h3 style="color: var(--success);">₹{{ total_revenue }}</h3>
+                </div>
+                <div class="stat-icon-wrapper" style="background: rgba(16, 185, 129, 0.08); border-color: rgba(16, 185, 129, 0.15); color: var(--success);">
+                    <i class="fas fa-plus-circle"></i>
+                </div>
+            </div>
+            <div class="stat-card glass-panel">
+                <div class="stat-card-left">
+                    <span>Total Monthly Expenses</span>
+                    <h3 style="color: var(--danger);">₹{{ total_expenses }}</h3>
+                </div>
+                <div class="stat-icon-wrapper" style="background: rgba(239, 68, 68, 0.08); border-color: rgba(239, 68, 68, 0.15); color: var(--danger);">
+                    <i class="fas fa-minus-circle"></i>
+                </div>
+            </div>
+            <div class="stat-card glass-panel">
+                <div class="stat-card-left">
+                    <span>Estimated Net Profit</span>
+                    <h3 style="color: {{ 'var(--success)' if net_profit >= 0 else 'var(--danger)' }};">₹{{ net_profit }}</h3>
+                </div>
+                <div class="stat-icon-wrapper" style="background: {{ 'rgba(16, 185, 129, 0.08)' if net_profit >= 0 else 'rgba(239, 68, 68, 0.08)' }}; border-color: {{ 'rgba(16, 185, 129, 0.15)' if net_profit >= 0 else 'rgba(239, 68, 68, 0.15)' }}; color: {{ 'var(--success)' if net_profit >= 0 else 'var(--danger)' }};">
+                    <i class="fas fa-wallet"></i>
+                </div>
+            </div>
+        </div>
+
+        <!-- Recent Pending Fees -->
         <div class="dashboard-content">
             <div class="section-header">
-                <h3>Recent Pending Fees</h3>
+                <h3>Pending Collections (Recent)</h3>
             </div>
-            <div class="table-container">
+            <div class="table-container glass-panel">
                 <table>
                     <thead>
                         <tr>
@@ -109,10 +154,10 @@
                     <tbody>
                         {% for fee in pending_list[:5] %}
                         <tr>
-                            <td>{{ fee.name }}</td>
+                            <td style="font-weight: 600;">{{ fee.name }}</td>
                             <td>{{ fee.mobile }}</td>
-                            <td>{{ fee.month }}</td>
-                            <td>₹{{ fee.amount }}</td>
+                            <td><span class="badge badge-notset">{{ fee.month }}</span></td>
+                            <td style="font-weight: 700; color: var(--pending);">₹{{ fee.amount }}</td>
                             <td>
                                 <a href="{{ url_for('download_student_pdf', student_id=fee.student_id) }}" class="btn-sm btn-pdf" title="Download Report">
                                     <i class="fas fa-file-pdf"></i>
@@ -133,21 +178,21 @@
 
     <!-- Pending Fees Modal -->
     <div class="modal-overlay" id="fees-modal">
-        <div class="modal-card">
+        <div class="modal-card glass-panel">
             <div class="modal-header">
                 <h3>Pending Fees — {{ current_month_name }}</h3>
                 <button class="close-btn" onclick="closePendingFeesModal()">&times;</button>
             </div>
             <div class="modal-body" id="modal-content">
-                <!-- Data will be loaded via Fetch API -->
-                <div class="loader">Loading...</div>
+                <!-- Data loaded dynamically -->
+                <div class="loader">Loading pending fees...</div>
             </div>
         </div>
     </div>
 
     <!-- Payment Details Modal -->
     <div class="modal-overlay" id="payment-modal">
-        <div class="modal-card modal-sm">
+        <div class="modal-card modal-sm glass-panel">
             <div class="modal-header">
                 <div class="modal-title">
                     <i class="fas fa-credit-card"></i>
@@ -157,11 +202,12 @@
             </div>
             <div class="modal-body">
                 <div class="alert alert-error mb-20">
-                    <i class="fas fa-exclamation-triangle"></i> <strong>Warning:</strong> This action is irreversible.
+                    <i class="fas fa-exclamation-triangle"></i>
+                    <span><strong>Warning:</strong> Action is irreversible.</span>
                 </div>
                 <form id="payment-form" onsubmit="submitPayment(event)">
                     <input type="hidden" id="payment-fee-id">
-                    <div class="form-group">
+                    <div class="form-group" style="margin-bottom: 15px;">
                         <label for="payment_way"><i class="fas fa-wallet"></i> Payment Method</label>
                         <select id="payment_way" class="form-control" required>
                             <option value="">Select Payment Method</option>
@@ -169,16 +215,24 @@
                             <option value="Cash">Cash</option>
                         </select>
                     </div>
-                    <div class="form-group">
+                    <div class="form-group" style="margin-bottom: 20px;">
                         <label for="payment_date"><i class="fas fa-calendar-day"></i> Payment Date</label>
                         <input type="date" id="payment_date" class="form-control" required>
                     </div>
-                    <button type="submit" class="btn-primary w-100 mt-20">Confirm Payment</button>
+                    <button type="submit" class="btn-primary w-100">Confirm Payment</button>
                 </form>
             </div>
         </div>
     </div>
 
+    <!-- Inject data variables for Chart.js initialization -->
+    <script>
+        window.attendanceTrendDates = {{ attendance_trend_dates | tojson }};
+        window.attendanceTrendCounts = {{ attendance_trend_counts | tojson }};
+        window.totalRevenue = {{ total_revenue }};
+        window.totalExpenses = {{ total_expenses }};
+        window.pendingFeesAmount = {{ pending_fees_amount }};
+    </script>
     <script src="{{ url_for('static', filename='script.js') }}"></script>
 </body>
 </html>

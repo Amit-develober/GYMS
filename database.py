@@ -103,6 +103,14 @@ def init_db():
     except sqlite3.OperationalError:
         pass # Column already exists
 
+    # Performance Optimization: Create Indexes to make database operations lag-free
+    cursor.execute('CREATE INDEX IF NOT EXISTS idx_attendance_owner_date ON attendance(owner_id, date)')
+    cursor.execute('CREATE INDEX IF NOT EXISTS idx_attendance_student ON attendance(student_id)')
+    cursor.execute('CREATE INDEX IF NOT EXISTS idx_students_owner ON students(owner_id)')
+    cursor.execute('CREATE INDEX IF NOT EXISTS idx_fees_owner_month ON fees(owner_id, month)')
+    cursor.execute('CREATE INDEX IF NOT EXISTS idx_fees_student ON fees(student_id)')
+    cursor.execute('CREATE INDEX IF NOT EXISTS idx_expenses_owner ON expenses(owner_id)')
+
     conn.commit()
     conn.close()
 
