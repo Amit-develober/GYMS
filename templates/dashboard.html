@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GymPro — Dashboard</title>
+    <meta name="csrf-token" content="{{ csrf_token() }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+</head>
+<body>
+    <nav class="navbar">
+        <div class="nav-left">
+            <span class="owner-name"><i class="fas fa-user-circle"></i> {{ session['owner_name'] }}</span>
+        </div>
+        <div class="nav-center">
+            <a href="{{ url_for('dashboard') }}" class="nav-link active">Dashboard</a>
+            <a href="{{ url_for('today_management') }}" class="nav-link">Today</a>
+            <a href="{{ url_for('enroll_student') }}" class="nav-link">Enroll</a>
+            <a href="{{ url_for('expenses') }}" class="nav-link">Expenses</a>
+            <a href="{{ url_for('about') }}" class="nav-link">About</a>
+        </div>
+        <div class="nav-right">
+            <a href="{{ url_for('logout') }}" class="logout-btn"><i class="fas fa-sign-out-alt"></i> Logout</a>
+        </div>
+    </nav>
+
+    <main class="container">
+        <div class="dashboard-header">
+            <h2>Welcome Back, {{ session['owner_name'] }}</h2>
+            <p>Here's what's happening in your gym today.</p>
+        </div>
+
+        <div class="stats-grid">
+            <div class="stat-card">
+                <div class="stat-icon"><i class="fas fa-calendar-check"></i></div>
+                <div class="stat-info">
+                    <h3 id="today-students-count">{{ today_count }}</h3>
+                    <p>Today's Students</p>
+                </div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-icon"><i class="fas fa-users"></i></div>
+                <div class="stat-info">
+                    <h3 id="monthly-students-count">{{ monthly_count }}</h3>
+                    <p>Monthly Students</p>
+                </div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-icon"><i class="fas fa-address-book"></i></div>
+                <div class="stat-info">
+                    <h3 id="total-enrolled-count">{{ total_enrolled }}</h3>
+                    <p>Total Enrolled</p>
+                </div>
+            </div>
+            <div class="stat-card clickable" id="pending-fees-card" onclick="openPendingFeesModal()">
+                <div class="stat-icon"><i class="fas fa-money-bill-wave"></i></div>
+                <div class="stat-info">
+                    <h3 id="pending-fees-count-badge">{{ pending_fees_count }}</h3>
+                    <p>Pending Fees</p>
+                </div>
+                <div class="click-hint">Click to view <i class="fas fa-arrow-right"></i></div>
+            </div>
+        </div>
+
+        <div class="section-header mt-20">
+            <h3>Financial Overview — {{ current_month_name }}</h3>
+        </div>
+        <div class="stats-grid">
+            <div class="stat-card">
+                <div class="stat-icon"><i class="fas fa-chart-line text-success"></i></div>
+                <div class="stat-info">
+                    <h3>₹{{ total_revenue }}</h3>
+                    <p>Total Revenue</p>
+                </div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-icon"><i class="fas fa-file-invoice-dollar text-danger"></i></div>
+                <div class="stat-info">
+                    <h3>₹{{ total_expenses }}</h3>
+                    <p>Total Expenses</p>
+                </div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-icon"><i class="fas fa-wallet {{ 'text-success' if net_profit >= 0 else 'text-danger' }}"></i></div>
+                <div class="stat-info">
+                    <h3>₹{{ net_profit }}</h3>
+                    <p>Net Profit</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="dashboard-content">
+            <div class="section-header">
+                <h3>Recent Pending Fees</h3>
+            </div>
+            <div class="table-container">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Student Name</th>
+                            <th>Mobile</th>
+                            <th>Month</th>
+                            <th>Amount</th>
+                            <th>Report</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for fee in pending_list[:5] %}
+                        <tr>
+                            <td>{{ fee.name }}</td>
+                            <td>{{ fee.mobile }}</td>
+                            <td>{{ fee.month }}</td>
+                            <td>₹{{ fee.amount }}</td>
+                            <td>
+                                <a href="{{ url_for('download_student_pdf', student_id=fee.student_id) }}" class="btn-sm btn-pdf" title="Download Report">
+                                    <i class="fas fa-file-pdf"></i>
+                                </a>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                        {% if not pending_list %}
+                        <tr>
+                            <td colspan="5" class="empty-msg">No pending fees for this month!</td>
+                        </tr>
+                        {% endif %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </main>
+
+    <!-- Pending Fees Modal -->
+    <div class="modal-overlay" id="fees-modal">
+        <div class="modal-card">
+            <div class="modal-header">
+                <h3>Pending Fees — {{ current_month_name }}</h3>
+                <button class="close-btn" onclick="closePendingFeesModal()">&times;</button>
+            </div>
+            <div class="modal-body" id="modal-content">
+                <!-- Data will be loaded via Fetch API -->
+                <div class="loader">Loading...</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Payment Details Modal -->
+    <div class="modal-overlay" id="payment-modal">
+        <div class="modal-card modal-sm">
+            <div class="modal-header">
+                <div class="modal-title">
+                    <i class="fas fa-credit-card"></i>
+                    <h3>Payment Details</h3>
+                </div>
+                <button class="close-btn" onclick="closePaymentModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="alert alert-error mb-20">
+                    <i class="fas fa-exclamation-triangle"></i> <strong>Warning:</strong> This action is irreversible.
+                </div>
+                <form id="payment-form" onsubmit="submitPayment(event)">
+                    <input type="hidden" id="payment-fee-id">
+                    <div class="form-group">
+                        <label for="payment_way"><i class="fas fa-wallet"></i> Payment Method</label>
+                        <select id="payment_way" class="form-control" required>
+                            <option value="">Select Payment Method</option>
+                            <option value="Online Through QR">Online Through QR</option>
+                            <option value="Cash">Cash</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="payment_date"><i class="fas fa-calendar-day"></i> Payment Date</label>
+                        <input type="date" id="payment_date" class="form-control" required>
+                    </div>
+                    <button type="submit" class="btn-primary w-100 mt-20">Confirm Payment</button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <script src="{{ url_for('static', filename='script.js') }}"></script>
+</body>
+</html>

@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GymPro — Enroll Students</title>
+    <meta name="csrf-token" content="{{ csrf_token() }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+</head>
+<body>
+    <nav class="navbar">
+        <div class="nav-left">
+            <span class="owner-name"><i class="fas fa-user-circle"></i> {{ session['owner_name'] }}</span>
+        </div>
+        <div class="nav-center">
+            <a href="{{ url_for('dashboard') }}" class="nav-link">Dashboard</a>
+            <a href="{{ url_for('today_management') }}" class="nav-link">Today</a>
+            <a href="{{ url_for('enroll_student') }}" class="nav-link active">Enroll</a>
+            <a href="{{ url_for('expenses') }}" class="nav-link">Expenses</a>
+            <a href="{{ url_for('about') }}" class="nav-link">About</a>
+        </div>
+        <div class="nav-right">
+            <a href="{{ url_for('logout') }}" class="logout-btn"><i class="fas fa-sign-out-alt"></i> Logout</a>
+        </div>
+    </nav>
+
+    <main class="container">
+        <div class="page-header">
+            <h2>Student Enrollment</h2>
+            <p>Add new members or manage existing ones.</p>
+        </div>
+
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                {% for category, message in messages %}
+                    <div class="alert alert-{{ category }}">{{ message }}</div>
+                {% endfor %}
+            {% endif %}
+        {% endwith %}
+
+        <section class="form-section">
+            <div class="section-header">
+                <h3>Add New Student</h3>
+            </div>
+            <form action="{{ url_for('add_student') }}" method="POST" class="enroll-form">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="name"><i class="fas fa-user"></i> Full Name</label>
+                        <input type="text" name="name" id="name" placeholder="Enter student name" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="mobile"><i class="fas fa-phone"></i> Mobile Number</label>
+                        <input type="text" name="mobile" id="mobile" placeholder="10-digit number" required pattern="[0-9]{10}">
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="date_enrolled"><i class="fas fa-calendar-alt"></i> Date of Enroll</label>
+                        <input type="date" name="date_enrolled" id="date_enrolled" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="membership_duration"><i class="fas fa-clock"></i> Membership Duration (Months) <small>(1mon = 30 day)</small></label>
+                        <input type="number" name="membership_duration" id="membership_duration" value="1" min="1" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="monthly_fee"><i class="fas fa-rupee-sign"></i> Monthly Fee Amount (₹)</label>
+                        <input type="number" name="monthly_fee" id="monthly_fee" placeholder="e.g. 1000" required min="0">
+                    </div>
+                </div>
+                <button type="submit" class="btn-primary">Enroll Student</button>
+            </form>
+        </section>
+
+        <section class="table-section">
+            <div class="section-header">
+                <h3>Student List</h3>
+                <div class="filters">
+                    <a href="{{ url_for('enroll_student', filter='all') }}" class="filter-btn {{ 'active' if current_filter == 'all' }}">All</a>
+                    <a href="{{ url_for('enroll_student', filter='active') }}" class="filter-btn {{ 'active' if current_filter == 'active' }}">Active</a>
+                    <a href="{{ url_for('enroll_student', filter='out') }}" class="filter-btn {{ 'active' if current_filter == 'out' }}">Out</a>
+                </div>
+            </div>
+            <div class="table-container">
+                <table id="student-table">
+                    <thead>
+                        <tr>
+                            <th>#</th>
+                            <th>Name</th>
+                            <th>Mobile</th>
+                            <th>Enrolled Date</th>
+                            <th>Duration</th>
+                            <th>Fee (₹)</th>
+                            <th>Status</th>
+                            <th>Action</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for student in students %}
+                        <tr data-id="{{ student.id }}">
+                            <td>{{ loop.index }}</td>
+                            <td>{{ student.name }}</td>
+                            <td>{{ student.mobile }}</td>
+                            <td>{{ student.date_enrolled }}</td>
+                            <td>
+                                {{ student.membership_duration }} Mo
+                                <br>
+                                <small>
+                                    {% if student.days_left > 5 %}
+                                        <span class="text-success">{{ student.days_left }} days left</span>
+                                    {% elif student.days_left <= 5 and student.days_left >= 0 %}
+                                        <span class="text-warning">{{ student.days_left }} days left</span>
+                                    {% else %}
+                                        <span class="text-danger">Expired</span>
+                                    {% endif %}
+                                </small>
+                            </td>
+                            <td>₹{{ student.monthly_fee }}</td>
+                            <td>
+                                {% if student.is_active %}
+                                <span class="badge badge-paid">Active</span>
+                                {% else %}
+                                <span class="badge badge-notset">Out</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                <div class="action-buttons">
+                                    {% if student.is_active %}
+                                    <button class="btn-sm btn-danger" onclick="toggleStudentStatus({{ student.id }}, 0)">Mark Out</button>
+                                    {% else %}
+                                    <button class="btn-sm btn-success" onclick="toggleStudentStatus({{ student.id }}, 1)">Re-Enroll</button>
+                                    {% endif %}
+                                    <a href="{{ url_for('download_student_pdf', student_id=student.id) }}" class="btn-sm btn-pdf" title="Download Report">
+                                        <i class="fas fa-file-pdf"></i>
+                                    </a>
+                                </div>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                        {% if not students %}
+                        <tr>
+                            <td colspan="8" class="empty-msg">No students found.</td>
+                        </tr>
+                        {% endif %}
+                    </tbody>
+                </table>
+            </div>
+        </section>
+    </main>
+
+    <script src="{{ url_for('static', filename='script.js') }}"></script>
+    <script>
+        // Set default enroll date to today
+        document.getElementById('date_enrolled').valueAsDate = new Date();
+    </script>
+</body>
+</html>

@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GymPro — About</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+</head>
+<body>
+    <nav class="navbar">
+        <div class="nav-left">
+            <span class="owner-name"><i class="fas fa-user-circle"></i> {{ session['owner_name'] }}</span>
+        </div>
+        <div class="nav-center">
+            <a href="{{ url_for('dashboard') }}" class="nav-link">Dashboard</a>
+            <a href="{{ url_for('today_management') }}" class="nav-link">Today</a>
+            <a href="{{ url_for('enroll_student') }}" class="nav-link">Enroll</a>
+            <a href="{{ url_for('expenses') }}" class="nav-link">Expenses</a>
+            <a href="{{ url_for('about') }}" class="nav-link active">About</a>
+        </div>
+        <div class="nav-right">
+            <a href="{{ url_for('logout') }}" class="logout-btn"><i class="fas fa-sign-out-alt"></i> Logout</a>
+        </div>
+    </nav>
+
+    <main class="container">
+        <section class="about-section">
+            <div class="about-hero">
+                <h1>About GymPro</h1>
+                <p>Empowering gym owners with smart management tools.</p>
+            </div>
+
+            <div class="about-content">
+                <div class="about-card">
+                    <h3>What is GymPro?</h3>
+                    <p>GymPro is a complete gym management system designed specifically for gym owners. It simplifies the daily operations of running a fitness center by providing tools to track attendance, manage student enrollments, and monitor fee payments—all from a single, intuitive dashboard.</p>
+                </div>
+
+                <div class="features-grid">
+                    <div class="feature-card">
+                        <i class="fas fa-shield-alt"></i>
+                        <h4>Secure Login</h4>
+                        <p>Owner-only access with encrypted passwords.</p>
+                    </div>
+                    <div class="feature-card">
+                        <i class="fas fa-chart-line"></i>
+                        <h4>Live Dashboard</h4>
+                        <p>Real-time stats on attendance and enrollments.</p>
+                    </div>
+                    <div class="feature-card">
+                        <i class="fas fa-user-check"></i>
+                        <h4>Attendance Tracking</h4>
+                        <p>Record daily entries and exits with ease.</p>
+                    </div>
+                    <div class="feature-card">
+                        <i class="fas fa-user-plus"></i>
+                        <h4>Enrollment Management</h4>
+                        <p>Seamlessly add and manage gym members.</p>
+                    </div>
+                    <div class="feature-card">
+                        <i class="fas fa-rupee-sign"></i>
+                        <h4>Fee Monitoring</h4>
+                        <p>Track pending payments and mark as paid.</p>
+                    </div>
+                </div>
+
+                <div class="about-footer">
+                    <div class="developer-info">
+                        <h3>Developed By</h3>
+                        <p class="dev-name">Amit Kushwaha</p>
+                        <p class="dev-tech">Built with Python, Flask and SQLite</p>
+                    </div>
+                    <div class="social-links">
+                        <a href="#"><i class="fab fa-github"></i></a>
+                        <a href="#"><i class="fab fa-linkedin"></i></a>
+                        <a href="#"><i class="fas fa-envelope"></i></a>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <script src="{{ url_for('static', filename='script.js') }}"></script>
+</body>
+</html>
