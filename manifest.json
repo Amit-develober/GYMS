@@ -1,0 +1,18 @@
+{
+  "name": "ApexGym Management System",
+  "short_name": "ApexGym",
+  "description": "A premium Single Page Application and Progressive Web App for managing members, attendance sheet, and expenses of gym operations.",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "background_color": "#060b16",
+  "theme_color": "#060b16",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "assets/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

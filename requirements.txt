@@ -1,4 +1,0 @@
-Flask
-flask-bcrypt
-flask-wtf
-reportlab
