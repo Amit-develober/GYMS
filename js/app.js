@@ -11,7 +11,13 @@ let expensesList = [];
 let attendanceList = [];
 
 // --- CONSTANTS & HELPERS ---
-const currencySymbol = "$";
+let currencySymbol = localStorage.getItem("gym_currency") || "$";
+
+const updateDOMCurrencySymbols = () => {
+  document.querySelectorAll(".currency-label-symbol").forEach((el) => {
+    el.innerText = currencySymbol;
+  });
+};
 
 // Format date to local readable format
 const formatLocalDate = (dateStr) => {
@@ -33,6 +39,15 @@ const calcExpiryDate = (enrollDateStr, months) => {
   const date = new Date(enrollDateStr);
   date.setDate(date.getDate() + (parseInt(months) * 30));
   return date.toISOString().split("T")[0];
+};
+
+const updateEnrollExpiry = () => {
+  const enrollDate = document.getElementById("enroll-date")?.value;
+  const months = document.getElementById("enroll-membership")?.value;
+  const expiryInput = document.getElementById("enroll-expiry");
+  if (enrollDate && months && expiryInput) {
+    expiryInput.value = calcExpiryDate(enrollDate, months);
+  }
 };
 
 // Calculate number of days between two dates
@@ -211,7 +226,7 @@ const handleRouting = () => {
   const hash = window.location.hash.replace("#", "") || "dashboard";
   currentRoute = hash;
 
-  // Active navigation items (Desktop Sidebar)
+  // Active navigation items (Desktop Sidebar / Mobile Drawer)
   document.querySelectorAll(".sidebar .nav-item").forEach((el) => {
     if (el.getAttribute("data-target") === hash) {
       el.classList.add("active");
@@ -220,14 +235,15 @@ const handleRouting = () => {
     }
   });
 
-  // Active navigation items (Mobile Navbar)
-  document.querySelectorAll(".mobile-nav-item").forEach((el) => {
-    if (el.getAttribute("data-target") === hash) {
-      el.classList.add("active");
-    } else {
-      el.classList.remove("active");
-    }
-  });
+  // Close mobile sidebar drawer if open
+  const sidebar = document.querySelector(".sidebar");
+  const sidebarOverlay = document.getElementById("sidebar-overlay");
+  if (sidebar && sidebar.classList.contains("active")) {
+    sidebar.classList.remove("active");
+  }
+  if (sidebarOverlay && sidebarOverlay.classList.contains("active")) {
+    sidebarOverlay.classList.remove("active");
+  }
 
   // Swap pages
   document.querySelectorAll(".page-section").forEach((sec) => {
@@ -251,12 +267,19 @@ const loadRouteData = async (route) => {
         await loadAttendance();
         break;
       case "enroll":
-        // Set default date picker to today
         document.getElementById("enroll-date").value = getTodayDateString();
+        updateEnrollExpiry();
+        await loadEnrollDirectory();
         break;
       case "expenses":
         document.getElementById("expense-date").value = getTodayDateString();
         await loadExpenses();
+        break;
+      case "settings":
+        const selectEl = document.getElementById("settings-currency");
+        if (selectEl) {
+          selectEl.value = currencySymbol;
+        }
         break;
       case "about":
         break;
@@ -285,15 +308,15 @@ const loadDashboard = async () => {
 
   const today = getTodayDateString();
 
-  // 1. Total Students
-  document.getElementById("stat-total-students").innerText = students.length;
+  // 1. Total Students (exclude Out students)
+  document.getElementById("stat-total-students").innerText = students.filter((s) => !s.isOut).length;
 
   // 2. Today Attendance
   const presentCount = attendance.filter((a) => a.status === "present").length;
   document.getElementById("stat-today-attendance").innerText = presentCount;
 
-  // 3. Pending Fee Count (expiryDate < today)
-  const unpaidCount = students.filter((s) => s.expiryDate < today).length;
+  // 3. Pending Fee Count (expiryDate < today, exclude Out students)
+  const unpaidCount = students.filter((s) => !s.isOut && s.expiryDate < today).length;
   document.getElementById("stat-pending-fees").innerText = unpaidCount;
 
   // 4. Financial computations (This month)
@@ -373,7 +396,7 @@ const loadAttendance = async () => {
     dbAPI.getAttendance(today)
   ]);
 
-  studentsList = students;
+  studentsList = students.filter((s) => !s.isOut);
   attendanceList = todayAttendance;
 
   renderAttendanceList(studentsList, attendanceList);
@@ -491,52 +514,177 @@ const loadExpenses = async () => {
   });
 };
 
+// --- MEMBER DIRECTORY ROUTE ---
+const loadEnrollDirectory = async () => {
+  const [students, allAttendance] = await Promise.all([
+    dbAPI.getStudents(),
+    dbAPI.getAllAttendance()
+  ]);
+
+  const searchInput = document.getElementById("enroll-student-search");
+  const statusFilter = document.getElementById("enroll-student-status-filter");
+
+  if (!searchInput || !statusFilter) return;
+
+  const renderList = () => {
+    const query = searchInput.value.toLowerCase().trim();
+    const statusVal = statusFilter.value;
+    const today = getTodayDateString();
+
+    const filtered = students.filter((s) => {
+      // 1. Status Filter
+      if (statusVal === "active" && s.isOut) return false;
+      if (statusVal === "out" && !s.isOut) return false;
+
+      // 2. Search Query (name or mobile)
+      const nameMatch = s.name.toLowerCase().includes(query);
+      const mobileMatch = s.mobile.includes(query);
+      return nameMatch || mobileMatch;
+    });
+
+    const tbody = document.getElementById("enroll-student-list");
+    if (!tbody) return;
+
+    if (filtered.length === 0) {
+      tbody.innerHTML = `<tr><td colspan="7" style="text-align: center; color: var(--text-muted);">No members found.</td></tr>`;
+      return;
+    }
+
+    tbody.innerHTML = filtered.map((s) => {
+      // Calculate attendance rate (presentCount / elapsedDays)
+      const presentCount = allAttendance.filter((a) => a.studentId === s.id && a.status === "present").length;
+      const start = s.enrollmentDate || s.createdAt || today;
+      const elapsedDays = Math.max(1, getDaysDiff(start, today) + 1);
+      const attendanceRateText = `${presentCount} / ${elapsedDays}`;
+
+      // Status Badge
+      let statusBadge = "";
+      if (s.isOut) {
+        statusBadge = `<span class="badge badge-danger">Out</span>`;
+      } else if (s.expiryDate < today) {
+        statusBadge = `<span class="badge badge-warning">Unpaid</span>`;
+      } else {
+        statusBadge = `<span class="badge badge-success">Active</span>`;
+      }
+
+      // Action Button
+      let actionBtn = "";
+      if (s.isOut) {
+        actionBtn = `
+          <button class="btn btn-primary btn-toggle-status" data-id="${s.id}" data-action="activate" style="padding: 0.35rem 0.65rem; font-size: 0.75rem;">
+            Re-activate
+          </button>
+        `;
+      } else {
+        actionBtn = `
+          <button class="btn btn-secondary btn-toggle-status" data-id="${s.id}" data-action="out" style="padding: 0.35rem 0.65rem; font-size: 0.75rem; background: rgba(239, 68, 68, 0.1); border-color: rgba(239, 68, 68, 0.2); color: #f87171;">
+            Mark Out
+          </button>
+        `;
+      }
+
+      return `
+        <tr>
+          <td style="font-weight: 500;">${s.name}</td>
+          <td>${s.mobile}</td>
+          <td>${formatLocalDate(s.enrollmentDate)}</td>
+          <td>${s.membershipMonths} Month${s.membershipMonths > 1 ? "s" : ""}</td>
+          <td>${attendanceRateText}</td>
+          <td>${statusBadge}</td>
+          <td style="text-align: right;">${actionBtn}</td>
+        </tr>
+      `;
+    }).join("");
+
+    // Bind Toggle Status Buttons
+    tbody.querySelectorAll(".btn-toggle-status").forEach((btn) => {
+      btn.onclick = async (e) => {
+        const studentId = e.currentTarget.getAttribute("data-id");
+        const action = e.currentTarget.getAttribute("data-action");
+        const isOut = action === "out";
+
+        try {
+          await dbAPI.updateStudent(studentId, { isOut });
+          showToast(`Student marked as ${isOut ? "Out" : "Active"}.`, "success");
+          
+          // Update local copy of students list and re-render
+          const idx = students.findIndex((stud) => stud.id === studentId);
+          if (idx !== -1) {
+            students[idx].isOut = isOut;
+          }
+          renderList();
+        } catch (err) {
+          console.error(err);
+          showToast("Failed to update student status.", "danger");
+        }
+      };
+    });
+  };
+
+  // Bind live search & filter events
+  searchInput.oninput = renderList;
+  statusFilter.onchange = renderList;
+
+  // Initial render
+  renderList();
+};
+
 // --- FORMS HANDLING ---
 const setupFormHandlers = () => {
+  // Dynamic Expiry Calculation listeners
+  const enrollDateInput = document.getElementById("enroll-date");
+  const enrollMembershipInput = document.getElementById("enroll-membership");
+  if (enrollDateInput) {
+    enrollDateInput.addEventListener("change", updateEnrollExpiry);
+  }
+  if (enrollMembershipInput) {
+    enrollMembershipInput.addEventListener("change", updateEnrollExpiry);
+  }
+
   // Enroll Form Submit
   const enrollForm = document.getElementById("enroll-form");
-  enrollForm.addEventListener("submit", async (e) => {
-    e.preventDefault();
-    const name = document.getElementById("enroll-name").value.trim();
-    const mobile = document.getElementById("enroll-mobile").value.trim();
-    const enrollDate = document.getElementById("enroll-date").value;
-    const months = document.getElementById("enroll-membership").value;
-    const feeCollected = parseFloat(document.getElementById("enroll-fee").value);
-    const paymentMethod = document.getElementById("enroll-method").value;
+  if (enrollForm) {
+    enrollForm.addEventListener("reset", () => {
+      setTimeout(updateEnrollExpiry, 0);
+    });
 
-    const expiryDate = calcExpiryDate(enrollDate, months);
+    enrollForm.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const name = document.getElementById("enroll-name").value.trim();
+      const mobile = document.getElementById("enroll-mobile").value.trim();
+      const enrollDate = document.getElementById("enroll-date").value;
+      const months = document.getElementById("enroll-membership").value;
+      const feeCollected = parseFloat(document.getElementById("enroll-fee").value);
+      const paymentMethod = "Default"; // Removed from form
 
-    try {
-      // 1. Save student details
-      const student = await dbAPI.addStudent({
-        name,
-        mobile,
-        enrollmentDate: enrollDate,
-        membershipMonths: months,
-        expiryDate,
-        feeAmount: feeCollected
-      });
+      // Set to one day before enrollment date so they start strictly expired/unpaid
+      const yesterday = new Date(enrollDate);
+      yesterday.setDate(yesterday.getDate() - 1);
+      const expiryDate = yesterday.toISOString().split("T")[0];
 
-      // 2. Log payment transaction
-      await dbAPI.addPayment({
-        studentId: student.id,
-        studentName: name,
-        amount: feeCollected,
-        date: enrollDate,
-        paymentMethod,
-        type: "fee"
-      });
+      try {
+        // 1. Save student details
+        await dbAPI.addStudent({
+          name,
+          mobile,
+          enrollmentDate: enrollDate,
+          membershipMonths: months,
+          expiryDate,
+          feeAmount: feeCollected
+        });
 
-      showToast(`Successfully enrolled ${name}!`, "success");
-      enrollForm.reset();
-      
-      // Redirect to dashboard
-      window.location.hash = "#dashboard";
-    } catch (err) {
-      console.error(err);
-      showToast("Enrollment failed. Please check input values.", "danger");
-    }
-  });
+        showToast(`Successfully enrolled ${name}!`, "success");
+        enrollForm.reset();
+        await loadEnrollDirectory();
+        
+        // Redirect to dashboard
+        window.location.hash = "#dashboard";
+      } catch (err) {
+        console.error(err);
+        showToast("Enrollment failed. Please check input values.", "danger");
+      }
+    });
+  }
 
   // Expense Form Submit
   const expenseForm = document.getElementById("expense-form");
@@ -669,8 +817,8 @@ const loadPendingFeesModal = async () => {
   const students = await dbAPI.getStudents();
   const today = getTodayDateString();
 
-  // Filter expired students
-  const unpaidStudents = students.filter((s) => s.expiryDate < today);
+  // Filter expired students (exclude Out students)
+  const unpaidStudents = students.filter((s) => !s.isOut && s.expiryDate < today);
 
   const tbody = document.getElementById("unpaid-members-list");
   if (unpaidStudents.length === 0) {
@@ -763,12 +911,134 @@ const checkGymProfileOnboarding = async () => {
 };
 
 // --- INITIALIZATION GATE ---
+const setupMobileSidebar = () => {
+  const sidebar = document.querySelector(".sidebar");
+  const sidebarOverlay = document.getElementById("sidebar-overlay");
+  const hamburgerBtn = document.getElementById("btn-hamburger");
+  const closeSidebarBtn = document.getElementById("btn-close-sidebar");
+
+  if (hamburgerBtn) {
+    hamburgerBtn.addEventListener("click", () => {
+      sidebar.classList.add("active");
+      sidebarOverlay.classList.add("active");
+    });
+  }
+
+  const closeSidebar = () => {
+    sidebar.classList.remove("active");
+    sidebarOverlay.classList.remove("active");
+  };
+
+  if (closeSidebarBtn) {
+    closeSidebarBtn.addEventListener("click", closeSidebar);
+  }
+  if (sidebarOverlay) {
+    sidebarOverlay.addEventListener("click", closeSidebar);
+  }
+};
+
+const setupSettingsHandlers = () => {
+  const settingsForm = document.getElementById("settings-form");
+  const resetBtn = document.getElementById("btn-reset-database");
+
+  if (settingsForm) {
+    settingsForm.addEventListener("submit", (e) => {
+      e.preventDefault();
+      const newSymbol = document.getElementById("settings-currency").value;
+      currencySymbol = newSymbol;
+      localStorage.setItem("gym_currency", newSymbol);
+      
+      // Update DOM labels instantly
+      updateDOMCurrencySymbols();
+      
+      showToast("Settings saved successfully!", "success");
+      
+      // Refresh dashboard
+      loadDashboard();
+    });
+  }
+
+  if (resetBtn) {
+    resetBtn.addEventListener("click", async () => {
+      const confirm1 = confirm("⚠️ WARNING: Are you sure you want to reset the gym database? This will permanently delete all members, payments, expenses, and configuration data!");
+      if (!confirm1) return;
+
+      const confirm2 = confirm("🚨 FINAL CONFIRMATION: This action is completely irreversible. Are you absolutely certain you want to proceed with deleting all data?");
+      if (!confirm2) return;
+
+      try {
+        showToast("Resetting database...", "warning");
+        await dbAPI.resetData();
+        showToast("Database successfully reset!", "success");
+        
+        // Reload page to force onboarding screen
+        setTimeout(() => {
+          window.location.hash = "#dashboard";
+          window.location.reload();
+        }, 1500);
+      } catch (err) {
+        console.error(err);
+        showToast("Failed to reset database.", "danger");
+      }
+    });
+  }
+};
+
+const enforceNumericInputs = () => {
+  // Select phone/mobile fields that must contain ONLY digits
+  const integerFields = [
+    document.getElementById("enroll-mobile"),
+    document.getElementById("onboard-gym-phone")
+  ];
+
+  integerFields.forEach((field) => {
+    if (!field) return;
+    field.setAttribute("inputmode", "numeric");
+    field.setAttribute("pattern", "[0-9]*");
+
+    field.addEventListener("input", (e) => {
+      e.target.value = e.target.value.replace(/\D/g, "");
+    });
+  });
+
+  // Select fee/amount fields that must contain ONLY valid positive numbers/decimals
+  const decimalFields = [
+    document.getElementById("enroll-fee"),
+    document.getElementById("expense-amount"),
+    document.getElementById("renew-amount")
+  ];
+
+  decimalFields.forEach((field) => {
+    if (!field) return;
+    field.setAttribute("inputmode", "decimal");
+    field.setAttribute("min", "0");
+
+    field.addEventListener("keypress", (e) => {
+      if (["e", "E", "+", "-"].includes(e.key)) {
+        e.preventDefault();
+      }
+    });
+
+    field.addEventListener("input", (e) => {
+      let val = e.target.value;
+      if (val && (val.includes("e") || val.includes("E") || val.includes("-") || val.includes("+"))) {
+        val = val.replace(/[eE\-\+]/g, "");
+        e.target.value = val;
+      }
+    });
+  });
+};
+
 const initApp = () => {
   setupNetworkListeners();
   setupAuthListeners();
   setupNavigation();
   setupFormHandlers();
   setupModalHandlers();
+  setupMobileSidebar();
+  setupSettingsHandlers();
+  updateDOMCurrencySymbols();
+  enforceNumericInputs();
 };
 
 if (document.readyState === "loading") {

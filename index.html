@@ -52,6 +52,7 @@
   <!-- Web App Manifest for PWA -->
   <link rel="manifest" href="manifest.json">
   <link rel="apple-touch-icon" href="assets/icon.svg">
+  <link rel="icon" type="image/png" href="assets/logo.png">
   
   <!-- Stylesheets -->
   <link rel="stylesheet" href="index.css">
@@ -66,7 +67,7 @@
     <div class="card-panel auth-card">
       <div class="auth-header">
         <div class="auth-logo">
-          <div class="logo-icon">A</div>
+          <img src="assets/logo.png" alt="Logo" class="logo-img" style="width: 48px; height: 48px;">
         </div>
         <h2 id="auth-title" class="auth-title">Welcome to ApexGym</h2>
         <p id="auth-subtitle" class="auth-subtitle">Login to access your gym operations dashboard</p>
@@ -108,10 +109,7 @@
         Sign in with Google
       </button>
       
-      <!-- Demo Bypass Helper -->
-      <div style="margin-top: 2rem; padding: 0.75rem; border-radius: 8px; background: rgba(255, 255, 255, 0.02); border: 1px dashed var(--border-light); text-align: center; font-size: 0.75rem; color: var(--text-secondary);">
-        <p><strong>Demo Mode Active:</strong> You can enter any email and a 6+ character password to test the app locally.</p>
-      </div>
+
     </div>
   </div>
 
@@ -120,12 +118,17 @@
     
     <!-- DESKTOP SIDEBAR -->
     <aside class="sidebar">
-      <div class="logo-section">
-        <div class="logo-icon">A</div>
-        <div>
-          <h1 class="logo-text" id="header-gym-name">ApexGym</h1>
-          <span class="logo-tagline">Management</span>
+      <div class="logo-section" style="justify-content: space-between; align-items: center; width: 100%;">
+        <div style="display: flex; align-items: center; gap: 0.75rem;">
+          <img src="assets/logo.png" alt="Logo" class="logo-img">
+          <div>
+            <h1 class="logo-text" id="header-gym-name">ApexGym</h1>
+            <span class="logo-tagline">Management</span>
+          </div>
         </div>
+        <button class="icon-btn mobile-close-btn" id="btn-close-sidebar">
+          <i data-lucide="x"></i>
+        </button>
       </div>
       
       <nav class="nav-links">
@@ -140,6 +143,9 @@
         </li>
         <li class="nav-item" data-target="expenses">
           <a href="#expenses"><i data-lucide="wallet"></i> Expenses</a>
+        </li>
+        <li class="nav-item" data-target="settings">
+          <a href="#settings"><i data-lucide="settings"></i> Settings</a>
         </li>
         <li class="nav-item" data-target="about">
           <a href="#about"><i data-lucide="info"></i> About</a>
@@ -160,40 +166,25 @@
       </div>
     </aside>
 
+    <div id="sidebar-overlay" class="sidebar-overlay"></div>
+
     <!-- MOBILE TOP HEADER -->
     <header class="mobile-header">
-      <div style="display: flex; align-items: center; gap: 8px;">
-        <div class="logo-icon" style="width:32px; height:32px; font-size: 0.95rem;">A</div>
-        <span class="logo-text" id="mobile-header-gym-name" style="font-size: 1.1rem;">ApexGym</span>
+      <div style="display: flex; align-items: center; gap: 12px;">
+        <button class="icon-btn" id="btn-hamburger" style="display: flex; align-items: center; justify-content: center;">
+          <i data-lucide="menu"></i>
+        </button>
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <img src="assets/logo.png" alt="Logo" class="logo-img" style="width: 32px; height: 32px;">
+          <span class="logo-text" id="mobile-header-gym-name" style="font-size: 1.1rem;">ApexGym</span>
+        </div>
       </div>
       <button class="icon-btn" id="btn-logout-mobile">
         <i data-lucide="log-out"></i>
       </button>
     </header>
 
-    <!-- MOBILE BOTTOM NAVBAR -->
-    <nav class="mobile-nav">
-      <a href="#dashboard" class="mobile-nav-item active" data-target="dashboard">
-        <i data-lucide="layout-dashboard"></i>
-        <span>Dashboard</span>
-      </a>
-      <a href="#attendance" class="mobile-nav-item" data-target="attendance">
-        <i data-lucide="check-square"></i>
-        <span>Attendance</span>
-      </a>
-      <a href="#enroll" class="mobile-nav-item" data-target="enroll">
-        <i data-lucide="user-plus"></i>
-        <span>Enroll</span>
-      </a>
-      <a href="#expenses" class="mobile-nav-item" data-target="expenses">
-        <i data-lucide="wallet"></i>
-        <span>Expenses</span>
-      </a>
-      <a href="#about" class="mobile-nav-item" data-target="about">
-        <i data-lucide="info"></i>
-        <span>About</span>
-      </a>
-    </nav>
+
 
     <!-- MAIN VIEWS WRAPPER -->
     <main class="main-content">
@@ -407,19 +398,14 @@
 
               <!-- Initial Fee Amount -->
               <div class="form-group">
-                <label class="form-label" for="enroll-fee">Fee Collected ($)</label>
+                <label class="form-label" for="enroll-fee">Membership Fee (<span class="currency-label-symbol">$</span>)</label>
                 <input class="form-input" type="number" id="enroll-fee" placeholder="1000" min="0" required>
               </div>
 
-              <!-- Payment Method -->
+              <!-- Membership Expiry Date -->
               <div class="form-group">
-                <label class="form-label" for="enroll-method">Payment Method</label>
-                <select class="form-select" id="enroll-method" required>
-                  <option value="UPI">UPI (Google Pay / PhonePe / Paytm)</option>
-                  <option value="Cash">Cash</option>
-                  <option value="Card">Credit / Debit Card</option>
-                  <option value="Bank Transfer">Net Banking / Transfer</option>
-                </select>
+                <label class="form-label" for="enroll-expiry">Expiry Date (After Payment)</label>
+                <input class="form-input" type="date" id="enroll-expiry" readonly style="background: rgba(15, 23, 42, 0.02); cursor: not-allowed;">
               </div>
             </div>
             
@@ -428,6 +414,43 @@
               <button class="btn btn-primary" type="submit"><i data-lucide="check"></i> Register & Pay</button>
             </div>
           </form>
+        </div>
+
+        <!-- Member Directory Section -->
+        <div class="card-panel" style="max-width: 800px; margin: 2rem auto 0 auto;">
+          <h3 style="margin-bottom: 1.5rem; font-family: var(--font-display); font-size: 1.25rem; display: flex; align-items: center; gap: 8px;">
+            <i data-lucide="users" style="color: var(--accent-cyan);"></i> Member Directory
+          </h3>
+          
+          <div class="search-bar-wrapper" style="margin-bottom: 1.5rem; display: flex; gap: 1rem;">
+            <input type="text" id="enroll-student-search" class="form-input search-input" placeholder="Search members by name or mobile..." style="flex-grow: 1;">
+            <select id="enroll-student-status-filter" class="form-select" style="max-width: 200px;">
+              <option value="active">Active Members</option>
+              <option value="all">All Members</option>
+              <option value="out">Out Members</option>
+            </select>
+          </div>
+
+          <div class="table-container">
+            <table class="custom-table" id="enroll-student-table">
+              <thead>
+                <tr>
+                  <th>Name</th>
+                  <th>Mobile</th>
+                  <th>Enrollment Date</th>
+                  <th>Duration</th>
+                  <th>Attendance rate</th>
+                  <th>Status</th>
+                  <th style="text-align: right;">Action</th>
+                </tr>
+              </thead>
+              <tbody id="enroll-student-list">
+                <tr>
+                  <td colspan="7" style="text-align: center; color: var(--text-muted);">Loading members list...</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
         </div>
       </section>
 
@@ -449,7 +472,7 @@
               </div>
               
               <div class="form-group">
-                <label class="form-label" for="expense-amount">Amount ($)</label>
+                <label class="form-label" for="expense-amount">Amount (<span class="currency-label-symbol">$</span>)</label>
                 <input class="form-input" type="number" id="expense-amount" placeholder="500" min="0.01" step="any" required>
               </div>
               
@@ -499,6 +522,52 @@
                 </tbody>
               </table>
             </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ==================== VIEW: SETTINGS ==================== -->
+      <section id="view-settings" class="page-section">
+        <div class="section-header">
+          <h2 class="section-title">Settings</h2>
+          <p class="section-subtitle">Configure system options, currency settings, and manage database records</p>
+        </div>
+        
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 1.5rem; align-items: start;">
+          <!-- General Settings (Currency) -->
+          <div class="card-panel">
+            <h3 style="margin-bottom: 1.5rem; font-family: var(--font-display); font-size: 1.25rem; display: flex; align-items: center; gap: 8px;">
+              <i data-lucide="coins" style="color: var(--accent-cyan);"></i> General Configuration
+            </h3>
+            <form id="settings-form">
+              <div class="form-group">
+                <label class="form-label" for="settings-currency">System Currency</label>
+                <select class="form-select" id="settings-currency" required>
+                  <option value="$">USD - Dollar ($)</option>
+                  <option value="₹">INR - Rupee (₹)</option>
+                  <option value="€">EUR - Euro (€)</option>
+                  <option value="£">GBP - Pound (£)</option>
+                  <option value="¥">JPY/CNY - Yen/Yuan (¥)</option>
+                  <option value="د.إ">AED - Dirham (د.إ)</option>
+                </select>
+              </div>
+              <button class="btn btn-primary" type="submit" style="width: 100%; margin-top: 0.5rem;">
+                Save Configuration
+              </button>
+            </form>
+          </div>
+
+          <!-- Danger Zone (Reset Database) -->
+          <div class="card-panel" style="border-color: rgba(255, 23, 68, 0.25);">
+            <h3 style="margin-bottom: 1.5rem; font-family: var(--font-display); font-size: 1.25rem; color: var(--accent-red); display: flex; align-items: center; gap: 8px;">
+              <i data-lucide="alert-triangle"></i> Danger Zone
+            </h3>
+            <p style="color: var(--text-secondary); font-size: 0.9rem; line-height: 1.5; margin-bottom: 1.5rem;">
+              Resetting the database will permanently delete all gym members, attendance check-ins, payments, expenses, and configuration details. This action is irreversible.
+            </p>
+            <button class="btn btn-danger" id="btn-reset-database" style="width: 100%;">
+              <i data-lucide="trash-2"></i> Reset Gym Database
+            </button>
           </div>
         </div>
       </section>
@@ -609,7 +678,7 @@
               </div>
 
               <div class="form-group">
-                <label class="form-label" for="renew-amount">Fee Collected ($)</label>
+                <label class="form-label" for="renew-amount">Fee Collected (<span class="currency-label-symbol">$</span>)</label>
                 <input class="form-input" type="number" id="renew-amount" min="0" required>
               </div>
             </div>

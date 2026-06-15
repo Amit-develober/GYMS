@@ -280,5 +280,60 @@ export const dbAPI = {
         .filter((p) => p.userId === userId)
         .sort((a, b) => new Date(b.date) - new Date(a.date));
     }
+  },
+
+  async getAllAttendance() {
+    const userId = getUserId();
+    if (firestore && db) {
+      const q = firestore.query(
+        firestore.collection(db, "attendance"),
+        firestore.where("userId", "==", userId)
+      );
+      const querySnapshot = await firestore.getDocs(q);
+      const attendance = [];
+      querySnapshot.forEach((doc) => {
+        attendance.push({ id: doc.id, ...doc.data() });
+      });
+      return attendance;
+    } else {
+      const attendance = getLocal("gym_attendance");
+      return attendance.filter((a) => a.userId === userId);
+    }
+  },
+
+  async resetData() {
+    const userId = getUserId();
+    if (firestore && db) {
+      const collections = ["students", "expenses", "payments", "attendance"];
+      for (const colName of collections) {
+        const q = firestore.query(
+          firestore.collection(db, colName),
+          firestore.where("userId", "==", userId)
+        );
+        const querySnapshot = await firestore.getDocs(q);
+        const promises = [];
+        querySnapshot.forEach((doc) => {
+          promises.push(firestore.deleteDoc(doc.ref));
+        });
+        await Promise.all(promises);
+      }
+      const profileRef = firestore.doc(db, "gym_profiles", userId);
+      await firestore.deleteDoc(profileRef);
+    } else {
+      const students = getLocal("gym_students").filter((s) => s.userId !== userId);
+      setLocal("gym_students", students);
+      
+      const attendance = getLocal("gym_attendance").filter((a) => a.userId !== userId);
+      setLocal("gym_attendance", attendance);
+      
+      const expenses = getLocal("gym_expenses").filter((e) => e.userId !== userId);
+      setLocal("gym_expenses", expenses);
+      
+      const payments = getLocal("gym_payments").filter((p) => p.userId !== userId);
+      setLocal("gym_payments", payments);
+      
+      const profiles = getLocal("gym_profiles").filter((p) => p.userId !== userId);
+      setLocal("gym_profiles", profiles);
+    }
   }
 };
