@@ -10,6 +10,15 @@ let paymentsList = [];
 let expensesList = [];
 let attendanceList = [];
 
+// --- DEBOUNCE HELPER ---
+const debounce = (func, delay = 100) => {
+  let timer;
+  return (...args) => {
+    clearTimeout(timer);
+    timer = setTimeout(() => func(...args), delay);
+  };
+};
+
 // --- CONSTANTS & HELPERS ---
 let currencySymbol = localStorage.getItem("gym_currency") || "$";
 
@@ -22,14 +31,17 @@ const updateDOMCurrencySymbols = () => {
 // Format date to local readable format
 const formatLocalDate = (dateStr) => {
   if (!dateStr) return "N/A";
+  // If date-only format, append local time prefix to prevent UTC shift
+  const formattedStr = dateStr.includes("T") ? dateStr : `${dateStr}T00:00:00`;
   const options = { year: "numeric", month: "short", day: "numeric" };
-  return new Date(dateStr).toLocaleDateString(undefined, options);
+  return new Date(formattedStr).toLocaleDateString(undefined, options);
 };
 
 // Check if a date string falls in the current calendar month
 const isCurrentMonth = (dateStr) => {
   if (!dateStr) return false;
-  const date = new Date(dateStr);
+  const formattedStr = dateStr.includes("T") ? dateStr : `${dateStr}T00:00:00`;
+  const date = new Date(formattedStr);
   const now = new Date();
   return date.getFullYear() === now.getFullYear() && date.getMonth() === now.getMonth();
 };
@@ -52,8 +64,9 @@ const updateEnrollExpiry = () => {
 
 // Calculate number of days between two dates
 const getDaysDiff = (dateStrStart, dateStrEnd) => {
-  const start = new Date(dateStrStart);
-  const end = new Date(dateStrEnd);
+  // Strip time component to calculate absolute calendar days difference in UTC
+  const start = new Date(dateStrStart.split("T")[0]);
+  const end = new Date(dateStrEnd.split("T")[0]);
   const diffTime = Math.abs(end - start);
   return Math.ceil(diffTime / (1000 * 60 * 60 * 24));
 };
@@ -88,7 +101,7 @@ const showToast = (message, type = "success") => {
   
   document.body.appendChild(toast);
   if (window.lucide) {
-    window.lucide.createIcons();
+    window.lucide.createIcons({ root: toast });
   }
   
   setTimeout(() => {
@@ -151,6 +164,10 @@ const setupAuthListeners = () => {
       // User logged out
       appScreen.style.display = "none";
       authScreen.style.display = "flex";
+      
+      // Clean up modal states so they do not overlay the login screen
+      document.getElementById("onboarding-modal")?.classList.remove("active");
+      document.getElementById("pending-fees-modal")?.classList.remove("active");
     }
     if (window.lucide) window.lucide.createIcons();
   });
@@ -288,7 +305,10 @@ const loadRouteData = async (route) => {
     console.error(`Error loading data for route: ${route}`, err);
     showToast("Failed to fetch records.", "danger");
   }
-  if (window.lucide) window.lucide.createIcons();
+  const activeSec = document.getElementById(`view-${route}`);
+  if (window.lucide && activeSec) {
+    window.lucide.createIcons({ root: activeSec });
+  }
 };
 
 // --- DASHBOARD ROUTE ---
@@ -404,13 +424,13 @@ const loadAttendance = async () => {
   // Setup live search filter
   const searchInput = document.getElementById("attendance-search");
   searchInput.value = ""; // clear previous search
-  searchInput.oninput = (e) => {
+  searchInput.oninput = debounce((e) => {
     const query = e.target.value.toLowerCase().trim();
     const filteredStudents = studentsList.filter(
       (s) => s.name.toLowerCase().includes(query) || s.mobile.includes(query)
     );
     renderAttendanceList(filteredStudents, attendanceList);
-  };
+  }, 100);
 };
 
 const renderAttendanceList = (students, attendance) => {
@@ -494,7 +514,9 @@ const loadExpenses = async () => {
     </tr>
   `).join("");
 
-  if (window.lucide) window.lucide.createIcons();
+  if (window.lucide) {
+    window.lucide.createIcons({ root: tbody });
+  }
 
   // Bind Delete buttons
   document.querySelectorAll(".btn-delete-expense").forEach((btn) => {
@@ -526,6 +548,14 @@ const loadEnrollDirectory = async () => {
 
   if (!searchInput || !statusFilter) return;
 
+  // Pre-calculate present count for all students in O(N) time
+  const presentCounts = {};
+  allAttendance.forEach((a) => {
+    if (a.status === "present") {
+      presentCounts[a.studentId] = (presentCounts[a.studentId] || 0) + 1;
+    }
+  });
+
   const renderList = () => {
     const query = searchInput.value.toLowerCase().trim();
     const statusVal = statusFilter.value;
@@ -546,16 +576,22 @@ const loadEnrollDirectory = async () => {
     if (!tbody) return;
 
     if (filtered.length === 0) {
-      tbody.innerHTML = `<tr><td colspan="7" style="text-align: center; color: var(--text-muted);">No members found.</td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="8" style="text-align: center; color: var(--text-muted);">No members found.</td></tr>`;
       return;
     }
 
     tbody.innerHTML = filtered.map((s) => {
-      // Calculate attendance rate (presentCount / elapsedDays)
-      const presentCount = allAttendance.filter((a) => a.studentId === s.id && a.status === "present").length;
+      // Calculate attendance rate (presentCount / elapsedDays) using O(1) lookups
+      const presentCount = presentCounts[s.id] || 0;
       const start = s.enrollmentDate || s.createdAt || today;
       const elapsedDays = Math.max(1, getDaysDiff(start, today) + 1);
       const attendanceRateText = `${presentCount} / ${elapsedDays}`;
+
+      // Payment Status Badge
+      const isPaid = s.expiryDate >= today;
+      const paymentBadge = isPaid
+        ? `<span class="badge badge-success">Paid</span>`
+        : `<span class="badge badge-danger">Unpaid</span>`;
 
       // Status Badge
       let statusBadge = "";
@@ -590,6 +626,7 @@ const loadEnrollDirectory = async () => {
           <td>${formatLocalDate(s.enrollmentDate)}</td>
           <td>${s.membershipMonths} Month${s.membershipMonths > 1 ? "s" : ""}</td>
           <td>${attendanceRateText}</td>
+          <td>${paymentBadge}</td>
           <td>${statusBadge}</td>
           <td style="text-align: right;">${actionBtn}</td>
         </tr>
@@ -621,8 +658,8 @@ const loadEnrollDirectory = async () => {
     });
   };
 
-  // Bind live search & filter events
-  searchInput.oninput = renderList;
+  // Bind live search & filter events with debounce
+  searchInput.oninput = debounce(renderList, 100);
   statusFilter.onchange = renderList;
 
   // Initial render
@@ -654,24 +691,43 @@ const setupFormHandlers = () => {
       const mobile = document.getElementById("enroll-mobile").value.trim();
       const enrollDate = document.getElementById("enroll-date").value;
       const months = document.getElementById("enroll-membership").value;
-      const feeCollected = parseFloat(document.getElementById("enroll-fee").value);
+      const feeCollected = parseFloat(document.getElementById("enroll-fee").value) || 0;
+      const paymentStatus = document.getElementById("enroll-status").value;
       const paymentMethod = "Default"; // Removed from form
 
-      // Set to one day before enrollment date so they start strictly expired/unpaid
-      const yesterday = new Date(enrollDate);
-      yesterday.setDate(yesterday.getDate() - 1);
-      const expiryDate = yesterday.toISOString().split("T")[0];
+      let expiryDate;
+      if (paymentStatus === "Unpaid") {
+        const yesterday = new Date(enrollDate);
+        yesterday.setDate(yesterday.getDate() - 1);
+        expiryDate = yesterday.toISOString().split("T")[0];
+      } else {
+        const expiryInput = document.getElementById("enroll-expiry");
+        expiryDate = expiryInput && expiryInput.value ? expiryInput.value : calcExpiryDate(enrollDate, months);
+      }
 
       try {
         // 1. Save student details
-        await dbAPI.addStudent({
+        const newStudent = await dbAPI.addStudent({
           name,
           mobile,
           enrollmentDate: enrollDate,
           membershipMonths: months,
           expiryDate,
-          feeAmount: feeCollected
+          feeAmount: feeCollected,
+          paymentStatus
         });
+
+        // 2. Add payment record only if Paid and fee is greater than 0
+        if (paymentStatus === "Paid" && feeCollected > 0) {
+          await dbAPI.addPayment({
+            studentId: newStudent.id,
+            studentName: name,
+            amount: feeCollected,
+            date: enrollDate,
+            paymentMethod: "Cash",
+            type: "enrollment"
+          });
+        }
 
         showToast(`Successfully enrolled ${name}!`, "success");
         enrollForm.reset();
@@ -720,12 +776,14 @@ const setupFormHandlers = () => {
       const gymName = document.getElementById("onboard-gym-name").value.trim();
       const address = document.getElementById("onboard-gym-address").value.trim();
       const phone = document.getElementById("onboard-gym-phone").value.trim();
+      const ownerName = document.getElementById("onboard-gym-owner").value.trim();
 
       try {
         await dbAPI.saveGymProfile({
           gymName,
           address,
-          phone
+          phone,
+          ownerName
         });
         showToast("Gym Profile configured successfully!", "success");
         await checkGymProfileOnboarding();
@@ -775,11 +833,11 @@ const setupModalHandlers = () => {
   renewalForm.addEventListener("submit", async (e) => {
     e.preventDefault();
     const studentId = document.getElementById("renew-student-id").value;
-    const studentName = document.getElementById("renew-student-name").innerText.split(":")[1]?.trim() || "Student";
+    const studentName = document.getElementById("renew-student-name").getAttribute("data-name") || "Student";
     const paymentDate = document.getElementById("renew-date").value;
     const paymentMethod = document.getElementById("renew-method").value;
     const renewMonths = document.getElementById("renew-months").value;
-    const amountCollected = parseFloat(document.getElementById("renew-amount").value);
+    const amountCollected = parseFloat(document.getElementById("renew-amount").value) || 0;
 
     const newExpiryDate = calcExpiryDate(paymentDate, renewMonths);
 
@@ -787,7 +845,8 @@ const setupModalHandlers = () => {
       // 1. Update Student record in DB
       await dbAPI.updateStudent(studentId, {
         expiryDate: newExpiryDate,
-        membershipMonths: renewMonths
+        membershipMonths: renewMonths,
+        paymentStatus: "Paid"
       });
 
       // 2. Save Payment record for Revenue count
@@ -859,7 +918,9 @@ const loadPendingFeesModal = async () => {
       // Open drawer & populate fields
       const renewalDrawer = document.getElementById("renewal-drawer");
       document.getElementById("renew-student-id").value = studentId;
-      document.getElementById("renew-student-name").innerText = `Renewing: ${studentName}`;
+      const nameEl = document.getElementById("renew-student-name");
+      nameEl.innerText = `Renewing: ${studentName}`;
+      nameEl.setAttribute("data-name", studentName);
       document.getElementById("renew-date").value = getTodayDateString();
       document.getElementById("renew-months").value = baseMonths;
       
@@ -895,11 +956,24 @@ const checkGymProfileOnboarding = async () => {
       // Apply gym configuration dynamically to DOM
       const gymName = profile.gymName || "ApexGym";
       const gymAddress = profile.address || "";
+      const ownerName = profile.ownerName || "";
       
       document.getElementById("header-gym-name").innerText = gymName;
       document.getElementById("mobile-header-gym-name").innerText = gymName;
       document.getElementById("about-gym-title").innerText = `${gymName} Manager v1.0.0`;
       document.getElementById("about-gym-address").innerText = `Location: ${gymAddress}`;
+      
+      if (ownerName) {
+        const usernameEl = document.getElementById("sidebar-username");
+        const avatarEl = document.getElementById("sidebar-avatar");
+        if (usernameEl) usernameEl.innerText = ownerName;
+        if (avatarEl) avatarEl.innerText = ownerName.charAt(0).toUpperCase();
+      }
+      
+      const roleEl = document.getElementById("sidebar-userrole");
+      if (roleEl) {
+        roleEl.innerText = "Gym Operator";
+      }
       
       // Launch router
       handleRouting();
@@ -1028,6 +1102,83 @@ const enforceNumericInputs = () => {
     });
   });
 };
+
+// Debounced dashboard loader to prevent double renders
+let dashboardTimeout = null;
+const debounceLoadDashboard = () => {
+  if (dashboardTimeout) clearTimeout(dashboardTimeout);
+  dashboardTimeout = setTimeout(() => {
+    loadDashboard();
+  }, 100);
+};
+
+// Listen to SWR background cache updates to keep UI synchronized
+window.addEventListener("db-update", (e) => {
+  const { type, data } = e.detail;
+  
+  if (type === "students") {
+    studentsList = data;
+    if (currentRoute === "attendance") {
+      const searchInput = document.getElementById("attendance-search");
+      const query = searchInput ? searchInput.value.toLowerCase().trim() : "";
+      const filteredStudents = studentsList.filter(
+        (s) => s.name.toLowerCase().includes(query) || s.mobile.includes(query)
+      );
+      renderAttendanceList(filteredStudents, attendanceList);
+    } else if (currentRoute === "enroll") {
+      loadEnrollDirectory();
+    }
+  } else if (type === "expenses") {
+    expensesList = data;
+    if (currentRoute === "expenses") {
+      loadExpenses();
+    }
+  } else if (type === "payments") {
+    paymentsList = data;
+  } else if (type === "attendance") {
+    const today = getTodayDateString();
+    if (data && data.date === today) {
+      attendanceList = data.data;
+      if (currentRoute === "attendance") {
+        const searchInput = document.getElementById("attendance-search");
+        const query = searchInput ? searchInput.value.toLowerCase().trim() : "";
+        const filteredStudents = studentsList.filter(
+          (s) => s.name.toLowerCase().includes(query) || s.mobile.includes(query)
+        );
+        renderAttendanceList(filteredStudents, attendanceList);
+      }
+    }
+  } else if (type === "gymProfile") {
+    if (data) {
+      const gymName = data.gymName || "ApexGym";
+      const gymAddress = data.address || "";
+      const ownerName = data.ownerName || "";
+      
+      const headerName = document.getElementById("header-gym-name");
+      const mobileHeaderName = document.getElementById("mobile-header-gym-name");
+      const aboutTitle = document.getElementById("about-gym-title");
+      const aboutAddress = document.getElementById("about-gym-address");
+      const roleEl = document.getElementById("sidebar-userrole");
+      const usernameEl = document.getElementById("sidebar-username");
+      const avatarEl = document.getElementById("sidebar-avatar");
+      
+      if (headerName) headerName.innerText = gymName;
+      if (mobileHeaderName) mobileHeaderName.innerText = gymName;
+      if (aboutTitle) aboutTitle.innerText = `${gymName} Manager v1.0.0`;
+      if (aboutAddress) aboutAddress.innerText = `Location: ${gymAddress}`;
+      if (roleEl) roleEl.innerText = "Gym Operator";
+      
+      if (ownerName) {
+        if (usernameEl) usernameEl.innerText = ownerName;
+        if (avatarEl) avatarEl.innerText = ownerName.charAt(0).toUpperCase();
+      }
+    }
+  }
+  
+  if (currentRoute === "dashboard") {
+    debounceLoadDashboard();
+  }
+});
 
 const initApp = () => {
   setupNetworkListeners();

@@ -51,7 +51,7 @@
   
   <!-- Web App Manifest for PWA -->
   <link rel="manifest" href="manifest.json">
-  <link rel="apple-touch-icon" href="assets/icon.svg">
+  <link rel="apple-touch-icon" href="assets/logo.png">
   <link rel="icon" type="image/png" href="assets/logo.png">
   
   <!-- Stylesheets -->
@@ -157,7 +157,7 @@
           <div class="avatar" id="sidebar-avatar">A</div>
           <div class="user-details">
             <div class="user-name" id="sidebar-username">Admin</div>
-            <div class="user-role">Gym Operator</div>
+            <div class="user-role" id="sidebar-userrole">Gym Operator</div>
           </div>
         </div>
         <button class="btn-logout" id="btn-logout-desktop">
@@ -273,7 +273,7 @@
         </div>
 
         <!-- Financial Summary charts / list side by side -->
-        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(350px, 1fr)); gap: 1.5rem;">
+        <div class="dashboard-tables-grid">
           <!-- Recent Renewals / Income -->
           <div class="card-panel">
             <h3 style="margin-bottom: 1.25rem; font-family: var(--font-display); font-size: 1.15rem; display: flex; align-items: center; gap: 8px;">
@@ -407,6 +407,15 @@
                 <label class="form-label" for="enroll-expiry">Expiry Date (After Payment)</label>
                 <input class="form-input" type="date" id="enroll-expiry" readonly style="background: rgba(15, 23, 42, 0.02); cursor: not-allowed;">
               </div>
+
+              <!-- Payment Status -->
+              <div class="form-group">
+                <label class="form-label" for="enroll-status">Payment Status</label>
+                <select class="form-select" id="enroll-status" required>
+                  <option value="Paid">Paid</option>
+                  <option value="Unpaid">Unpaid</option>
+                </select>
+              </div>
             </div>
             
             <div class="form-actions">
@@ -440,13 +449,14 @@
                   <th>Enrollment Date</th>
                   <th>Duration</th>
                   <th>Attendance rate</th>
+                  <th>Payment</th>
                   <th>Status</th>
                   <th style="text-align: right;">Action</th>
                 </tr>
               </thead>
               <tbody id="enroll-student-list">
                 <tr>
-                  <td colspan="7" style="text-align: center; color: var(--text-muted);">Loading members list...</td>
+                  <td colspan="8" style="text-align: center; color: var(--text-muted);">Loading members list...</td>
                 </tr>
               </tbody>
             </table>
@@ -461,7 +471,7 @@
           <p class="section-subtitle">Track rent, maintenance, utility bills, and other gym expenses</p>
         </div>
         
-        <div style="display: grid; grid-template-columns: 1fr 2fr; gap: 2rem; align-items: start; flex-wrap: wrap;">
+        <div class="expenses-grid">
           <!-- Log Expense Form -->
           <div class="card-panel">
             <h3 style="margin-bottom: 1.5rem; font-family: var(--font-display); font-size: 1.25rem;">Log Gym Expense</h3>
@@ -533,7 +543,7 @@
           <p class="section-subtitle">Configure system options, currency settings, and manage database records</p>
         </div>
         
-        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 1.5rem; align-items: start;">
+        <div class="settings-grid">
           <!-- General Settings (Currency) -->
           <div class="card-panel">
             <h3 style="margin-bottom: 1.5rem; font-family: var(--font-display); font-size: 1.25rem; display: flex; align-items: center; gap: 8px;">
@@ -651,7 +661,7 @@
             <input type="hidden" id="renew-student-id">
             <input type="hidden" id="renew-original-fee">
             
-            <div class="form-grid" style="grid-template-columns: repeat(2, 1fr);">
+            <div class="renewal-form-grid">
               <div class="form-group">
                 <label class="form-label" for="renew-date">Payment Date</label>
                 <input class="form-input" type="date" id="renew-date" required>
@@ -737,6 +747,10 @@
           <div class="form-group">
             <label class="form-label" for="onboard-gym-phone">Contact Number</label>
             <input class="form-input" type="tel" id="onboard-gym-phone" placeholder="9876543210" required>
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="onboard-gym-owner">Owner Name</label>
+            <input class="form-input" type="text" id="onboard-gym-owner" placeholder="John Doe" required>
           </div>
           
           <button class="btn btn-primary" type="submit" style="width: 100%; margin-top: 1rem;">

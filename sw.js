@@ -9,7 +9,7 @@ const ASSETS = [
   "./js/auth.js",
   "./js/db.js",
   "./js/firebase-config.js",
-  "./assets/icon.svg",
+  "./assets/logo.png",
   "https://unpkg.com/lucide@latest",
   "https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@400;500;600;700;800&display=swap"
 ];
@@ -42,37 +42,40 @@ self.addEventListener("activate", (e) => {
   );
 });
 
-// Fetch events handling (Network First, falling back to cache)
+// Fetch events handling (Stale-While-Revalidate / Cache-First strategy)
 self.addEventListener("fetch", (e) => {
   // Only cache standard GET requests (e.g. bypass Firestore REST/Websocket calls)
   if (e.request.method !== "GET") return;
 
-  // Bypass Firebase Authentication domain requests
+  // Bypass Firebase Authentication and database domain requests
   if (e.request.url.includes("googleapis.com") || e.request.url.includes("firebase")) {
     return;
   }
 
   e.respondWith(
-    fetch(e.request)
-      .then((response) => {
-        // Return valid responses, clone and save to cache
-        if (!response || response.status !== 200 || response.type !== "basic") {
-          return response;
-        }
-        const responseToCache = response.clone();
-        caches.open(CACHE_NAME).then((cache) => {
-          cache.put(e.request, responseToCache);
-        });
-        return response;
-      })
-      .catch(() => {
-        // If network request fails, search Cache Storage
-        return caches.match(e.request).then((cachedResponse) => {
-          if (cachedResponse) {
-            return cachedResponse;
+    caches.match(e.request).then((cachedResponse) => {
+      // Create a background fetch promise to update the cache
+      const fetchPromise = fetch(e.request)
+        .then((networkResponse) => {
+          if (networkResponse && networkResponse.status === 200) {
+            const responseToCache = networkResponse.clone();
+            caches.open(CACHE_NAME).then((cache) => {
+              cache.put(e.request, responseToCache);
+            });
           }
-          // Fallback if not found (can show a mock page or let it fail)
+          return networkResponse;
+        })
+        .catch(() => {
+          // Ignore background fetch errors (e.g., if offline)
         });
-      })
+
+      // If cached response exists, return it immediately and let fetchPromise run in background
+      if (cachedResponse) {
+        return cachedResponse;
+      }
+
+      // Otherwise, return the network request fetch promise
+      return fetchPromise;
+    })
   );
 });

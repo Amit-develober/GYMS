@@ -25,7 +25,7 @@
   
   --shadow-neon: 0 8px 32px 0 rgba(255, 106, 28, 0.08);
   --shadow-card: 0 8px 32px 0 rgba(15, 23, 42, 0.04);
-  --transition-smooth: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  --transition-smooth: color 0.2s cubic-bezier(0.4, 0, 0.2, 1), background-color 0.2s cubic-bezier(0.4, 0, 0.2, 1), border-color 0.2s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.2s cubic-bezier(0.4, 0, 0.2, 1), transform 0.2s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 /* Base resets & styles */
@@ -378,6 +378,7 @@ body {
   box-shadow: var(--shadow-card);
   margin-bottom: 2rem;
   transition: var(--transition-smooth);
+  min-width: 0;
 }
 
 .card-panel:hover {
@@ -407,7 +408,7 @@ body {
 /* Metric Stats Grid */
 .stats-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(280px, 100%), 1fr));
   gap: 1.5rem;
   margin-bottom: 2rem;
 }
@@ -492,7 +493,7 @@ body {
 /* Forms design */
 .form-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(220px, 100%), 1fr));
   gap: 1.5rem;
 }
 
@@ -593,13 +594,17 @@ body {
 
 /* Tables and Lists */
 .table-container {
+  width: 100%;
+  max-width: 100%;
   overflow-x: auto;
   border-radius: 12px;
   border: 1px solid var(--border-light);
+  -webkit-overflow-scrolling: touch;
 }
 
 .custom-table {
   width: 100%;
+  min-width: 600px;
   border-collapse: collapse;
   text-align: left;
 }
@@ -696,7 +701,7 @@ body {
   bottom: 0;
   background-color: rgba(255, 255, 255, 0.1);
   border: 1px solid var(--border-light);
-  transition: .3s;
+  transition: background-color 0.2s ease, border-color 0.2s ease;
   border-radius: 34px;
 }
 
@@ -708,7 +713,7 @@ body {
   left: 3px;
   bottom: 3px;
   background-color: white;
-  transition: .3s;
+  transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1);
   border-radius: 50%;
 }
 
@@ -925,6 +930,33 @@ input:checked + .slider:before {
   pointer-events: auto;
 }
 
+/* Responsive Grid Layouts */
+.dashboard-tables-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(350px, 100%), 1fr));
+  gap: 1.5rem;
+}
+
+.expenses-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 2fr);
+  gap: 2rem;
+  align-items: start;
+}
+
+.settings-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(320px, 100%), 1fr));
+  gap: 1.5rem;
+  align-items: start;
+}
+
+.renewal-form-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(220px, 100%), 1fr));
+  gap: 1rem;
+}
+
 /* Responsive Overrides */
 @media (max-width: 991px) {
   .sidebar {
@@ -954,12 +986,25 @@ input:checked + .slider:before {
   .mobile-nav {
     display: none !important;
   }
-  
-  .main-content {
-    margin-left: 0;
-    padding: 5rem 1rem 2rem 1rem; /* Removed bottom space since there is no bottom bar */
+      .app-container {
+        display: block;
+      }
+      .main-content {
+        margin-left: 0;
+        padding: 5rem 1rem 2rem 1rem; /* Removed bottom space since there is no bottom bar */
+        min-width: 0;
+        width: 100%;
+      }
+    .expenses-grid {
+      grid-template-columns: minmax(0, 1fr);
+      gap: 1.5rem;
+    }
+    .card-panel {
+      padding: 1.25rem 1rem;
+      border-radius: 16px;
+      margin-bottom: 1.5rem;
+    }
   }
-}
 
 @media (max-width: 480px) {
   .stats-grid {
@@ -968,6 +1013,24 @@ input:checked + .slider:before {
   
   .form-grid {
     grid-template-columns: 1fr;
+  }
+  
+  .main-content {
+    padding: 5rem 0.5rem 2rem 0.5rem;
+  }
+  
+  .card-panel {
+    padding: 1rem 0.75rem;
+  }
+  
+  .search-bar-wrapper {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.75rem;
+  }
+  
+  .search-bar-wrapper select {
+    max-width: 100% !important;
   }
 }
 
