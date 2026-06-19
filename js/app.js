@@ -46,11 +46,21 @@ const isCurrentMonth = (dateStr) => {
   return date.getFullYear() === now.getFullYear() && date.getMonth() === now.getMonth();
 };
 
-// Calculate membership expiry date: enrollment + months * 30 days
+// Format a Date object as YYYY-MM-DD using local timezone (avoids UTC shift)
+const toLocalDateString = (date) => {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, "0");
+  const d = String(date.getDate()).padStart(2, "0");
+  return `${y}-${m}-${d}`;
+};
+
+// Calculate membership expiry date: enrollment + duration in days
 const calcExpiryDate = (enrollDateStr, months) => {
-  const date = new Date(enrollDateStr);
-  date.setDate(date.getDate() + (parseInt(months) * 30));
-  return date.toISOString().split("T")[0];
+  const date = new Date(`${enrollDateStr}T00:00:00`);
+  const m = parseInt(months);
+  const days = m === 12 ? 365 : m * 30;
+  date.setDate(date.getDate() + days);
+  return toLocalDateString(date);
 };
 
 const updateEnrollExpiry = () => {
@@ -285,6 +295,7 @@ const loadRouteData = async (route) => {
         break;
       case "enroll":
         document.getElementById("enroll-date").value = getTodayDateString();
+        document.getElementById("enroll-date").setAttribute("min", getTodayDateString());
         updateEnrollExpiry();
         await loadEnrollDirectory();
         break;
@@ -697,9 +708,9 @@ const setupFormHandlers = () => {
 
       let expiryDate;
       if (paymentStatus === "Unpaid") {
-        const yesterday = new Date(enrollDate);
+        const yesterday = new Date(`${enrollDate}T00:00:00`);
         yesterday.setDate(yesterday.getDate() - 1);
-        expiryDate = yesterday.toISOString().split("T")[0];
+        expiryDate = toLocalDateString(yesterday);
       } else {
         const expiryInput = document.getElementById("enroll-expiry");
         expiryDate = expiryInput && expiryInput.value ? expiryInput.value : calcExpiryDate(enrollDate, months);
@@ -711,7 +722,7 @@ const setupFormHandlers = () => {
           name,
           mobile,
           enrollmentDate: enrollDate,
-          membershipMonths: months,
+          membershipMonths: parseInt(months),
           expiryDate,
           feeAmount: feeCollected,
           paymentStatus
@@ -845,7 +856,7 @@ const setupModalHandlers = () => {
       // 1. Update Student record in DB
       await dbAPI.updateStudent(studentId, {
         expiryDate: newExpiryDate,
-        membershipMonths: renewMonths,
+        membershipMonths: parseInt(renewMonths),
         paymentStatus: "Paid"
       });
 
@@ -891,15 +902,14 @@ const loadPendingFeesModal = async () => {
       <tr>
         <td style="font-weight: 600;">${s.name}</td>
         <td>${s.mobile}</td>
-        <td style="color: var(--accent-red);">${formatLocalDate(s.expiryDate)}</td>
-        <td><span style="color: var(--accent-yellow); font-weight: 500;">${daysUnpaid} Days</span></td>
+        <td style="color: #dc2626; font-weight: 500;">${formatLocalDate(s.expiryDate)}</td>
+        <td><span style="color: #334155; font-weight: 600;">${daysUnpaid} Days</span></td>
         <td style="text-align: right;">
-          <button class="btn btn-primary btn-renew-member" 
+          <button class="btn btn-primary btn-sm btn-renew-member" 
             data-id="${s.id}" 
             data-name="${s.name}" 
             data-fee="${s.feeAmount || 1000}" 
-            data-months="${s.membershipMonths || 1}"
-            style="padding: 0.45rem 0.85rem; font-size: 0.75rem;">
+            data-months="${s.membershipMonths || 1}">
             Mark Paid
           </button>
         </td>
@@ -919,7 +929,7 @@ const loadPendingFeesModal = async () => {
       const renewalDrawer = document.getElementById("renewal-drawer");
       document.getElementById("renew-student-id").value = studentId;
       const nameEl = document.getElementById("renew-student-name");
-      nameEl.innerText = `Renewing: ${studentName}`;
+      nameEl.innerText = studentName;
       nameEl.setAttribute("data-name", studentName);
       document.getElementById("renew-date").value = getTodayDateString();
       document.getElementById("renew-months").value = baseMonths;
@@ -930,7 +940,7 @@ const loadPendingFeesModal = async () => {
 
       // Update amount dynamically if months change
       document.getElementById("renew-months").onchange = (ev) => {
-        const factor = parseInt(ev.target.value) / parseInt(baseMonths);
+        const factor = parseInt(ev.target.value) / (parseInt(baseMonths) || 1);
         renewAmountInput.value = Math.round(parseFloat(baseFee) * factor);
       };
 
