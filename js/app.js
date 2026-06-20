@@ -93,12 +93,11 @@ const showToast = (message, type = "success") => {
   toast.style.bottom = "2rem";
   toast.style.right = "2rem";
   toast.style.zIndex = "9999";
-  toast.style.background = "rgba(17, 25, 40, 0.9)";
+  toast.style.background = "#111928";
   toast.style.border = `1px solid ${type === "success" ? "var(--accent-green)" : type === "warning" ? "var(--accent-yellow)" : "var(--accent-red)"}`;
   toast.style.padding = "0.85rem 1.5rem";
   toast.style.borderRadius = "12px";
   toast.style.boxShadow = "var(--shadow-card)";
-  toast.style.backdropFilter = "blur(20px)";
   toast.style.color = "#fff";
   toast.style.display = "flex";
   toast.style.alignItems = "center";

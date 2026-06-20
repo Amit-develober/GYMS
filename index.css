@@ -3,7 +3,7 @@
 
 :root {
   --bg-main: #faf7f2;
-  --bg-card: rgba(255, 255, 255, 0.85);
+  --bg-card: #ffffff;
   --bg-input: #ffffff;
   --accent-cyan: #FF6A1C;
   --accent-purple: #F5788B;
@@ -76,9 +76,7 @@ body {
 /* Sidebar navigation */
 .sidebar {
   width: var(--sidebar-width);
-  background: rgba(255, 255, 255, 0.9);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
+  background: #ffffff;
   border-right: 1px solid var(--border-light);
   display: flex;
   flex-direction: column;
@@ -247,9 +245,7 @@ body {
 /* Mobile top header & bottom nav */
 .mobile-header {
   display: none;
-  background: rgba(255, 255, 255, 0.9);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
+  background: #ffffff;
   border-bottom: 1px solid var(--border-light);
   position: fixed;
   top: 0;
@@ -264,9 +260,7 @@ body {
 
 .mobile-nav {
   display: none;
-  background: rgba(10, 15, 28, 0.9);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
+  background: #0a0f1c;
   border-top: 1px solid var(--border-light);
   position: fixed;
   bottom: 0;
@@ -370,8 +364,6 @@ body {
 /* Glassmorphism Card Panels */
 .card-panel {
   background: var(--bg-card);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
   border: 1px solid var(--border-light);
   border-radius: 20px;
   padding: 2rem;
@@ -415,8 +407,6 @@ body {
 
 .stat-card {
   background: var(--bg-card);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
   border: 1px solid var(--border-light);
   border-radius: 20px;
   padding: 1.5rem;
@@ -743,9 +733,7 @@ input:checked + .slider:before {
   left: 0;
   right: 0;
   bottom: 0;
-  background: rgba(15, 23, 42, 0.4);
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
+  background: rgba(15, 23, 42, 0.6);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -925,9 +913,7 @@ input:checked + .slider:before {
   left: 0;
   right: 0;
   bottom: 0;
-  background: rgba(15, 23, 42, 0.4);
-  backdrop-filter: blur(4px);
-  -webkit-backdrop-filter: blur(4px);
+  background: rgba(15, 23, 42, 0.5);
   z-index: 1000;
   opacity: 0;
   pointer-events: none;
