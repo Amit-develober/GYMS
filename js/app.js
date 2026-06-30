@@ -20,7 +20,7 @@ const debounce = (func, delay = 100) => {
 };
 
 // --- CONSTANTS & HELPERS ---
-let currencySymbol = localStorage.getItem("gym_currency") || "$";
+let currencySymbol = localStorage.getItem("gym_currency") || "₹";
 
 const updateDOMCurrencySymbols = () => {
   document.querySelectorAll(".currency-label-symbol").forEach((el) => {
@@ -74,9 +74,11 @@ const updateEnrollExpiry = () => {
 
 // Calculate number of days between two dates
 const getDaysDiff = (dateStrStart, dateStrEnd) => {
+  if (!dateStrStart || !dateStrEnd) return 0;
   // Strip time component to calculate absolute calendar days difference in UTC
   const start = new Date(dateStrStart.split("T")[0]);
   const end = new Date(dateStrEnd.split("T")[0]);
+  if (isNaN(start.getTime()) || isNaN(end.getTime())) return 0;
   const diffTime = Math.abs(end - start);
   return Math.ceil(diffTime / (1000 * 60 * 60 * 24));
 };
@@ -349,6 +351,13 @@ const loadDashboard = async () => {
   const unpaidCount = students.filter((s) => !s.isOut && s.expiryDate < today).length;
   document.getElementById("stat-pending-fees").innerText = unpaidCount;
 
+  // Expiring Soon Count (expiryDate < today or expiring in next 7 days, exclude Out students)
+  const expiringCount = students.filter((s) => !s.isOut && (s.expiryDate < today || getDaysDiff(today, s.expiryDate) <= 7)).length;
+  const expiringSoonEl = document.getElementById("stat-expiring-soon");
+  if (expiringSoonEl) {
+    expiringSoonEl.innerText = expiringCount;
+  }
+
   // 4. Financial computations (This month)
   let monthRevenue = 0;
   payments.forEach((p) => {
@@ -480,7 +489,7 @@ const renderAttendanceList = (students, attendance) => {
   }).join("");
 
   // Bind Switch Event Listeners
-  document.querySelectorAll(".attendance-toggle").forEach((el) => {
+  tbody.querySelectorAll(".attendance-toggle").forEach((el) => {
     el.addEventListener("change", async (e) => {
       const studentId = e.target.getAttribute("data-id");
       const studentName = e.target.getAttribute("data-name");
@@ -682,7 +691,14 @@ const setupFormHandlers = () => {
   const enrollDateInput = document.getElementById("enroll-date");
   const enrollMembershipInput = document.getElementById("enroll-membership");
   if (enrollDateInput) {
-    enrollDateInput.addEventListener("change", updateEnrollExpiry);
+    enrollDateInput.addEventListener("change", (e) => {
+      const today = getTodayDateString();
+      if (e.target.value && e.target.value < today) {
+        showToast("Enrollment date cannot be a past date.", "danger");
+        e.target.value = today;
+      }
+      updateEnrollExpiry();
+    });
   }
   if (enrollMembershipInput) {
     enrollMembershipInput.addEventListener("change", updateEnrollExpiry);
@@ -704,6 +720,12 @@ const setupFormHandlers = () => {
       const feeCollected = parseFloat(document.getElementById("enroll-fee").value) || 0;
       const paymentStatus = document.getElementById("enroll-status").value;
       const paymentMethod = "Default"; // Removed from form
+
+      const today = getTodayDateString();
+      if (enrollDate && enrollDate < today) {
+        showToast("Enrollment date cannot be a past date.", "danger");
+        return;
+      }
 
       let expiryDate;
       if (paymentStatus === "Unpaid") {
@@ -812,6 +834,11 @@ const setupModalHandlers = () => {
   const closeBtnFooter = document.getElementById("btn-close-pending-modal-footer");
   const renewalDrawer = document.getElementById("renewal-drawer");
 
+  const expiringModal = document.getElementById("expiring-soon-modal");
+  const expiringCard = document.getElementById("card-expiring-soon");
+  const closeExpiringHeader = document.getElementById("btn-close-expiring-modal");
+  const closeExpiringFooter = document.getElementById("btn-close-expiring-modal-footer");
+
   // Show Pending Fees Modal
   pendingCard.addEventListener("click", async () => {
     await loadPendingFeesModal();
@@ -831,6 +858,27 @@ const setupModalHandlers = () => {
   pendingModal.addEventListener("click", (e) => {
     if (e.target === pendingModal) closeModal();
   });
+
+  // Show Expiring Soon Modal
+  if (expiringCard) {
+    expiringCard.addEventListener("click", async () => {
+      await loadExpiringSoonModal();
+      expiringModal.classList.add("active");
+    });
+  }
+
+  // Close Expiring Modal triggers
+  const closeExpiringModal = () => {
+    expiringModal.classList.remove("active");
+    loadDashboard();
+  };
+  if (closeExpiringHeader) closeExpiringHeader.addEventListener("click", closeExpiringModal);
+  if (closeExpiringFooter) closeExpiringFooter.addEventListener("click", closeExpiringModal);
+  if (expiringModal) {
+    expiringModal.addEventListener("click", (e) => {
+      if (e.target === expiringModal) closeExpiringModal();
+    });
+  }
 
   // Cancel Renewal inline form
   document.getElementById("btn-cancel-renewal").onclick = (e) => {
@@ -882,6 +930,30 @@ const setupModalHandlers = () => {
   });
 };
 
+const sendWhatsAppReminder = (s) => {
+  const today = getTodayDateString();
+  const isExpired = s.expiryDate < today;
+  const message = `Hi ${s.name}, this is a gentle reminder regarding your Taekwondo Academy membership. Your fee of ${currencySymbol}${s.feeAmount || 1000} is pending, and your membership ${isExpired ? "has expired" : "is expiring soon"} on ${formatLocalDate(s.expiryDate)}. Please pay at your earliest convenience.`;
+  
+  if (confirm(`Review drafted WhatsApp Message:\n\n"${message}"\n\nClick OK to confirm and send.`)) {
+    // Strip non-numeric/non-plus characters from mobile
+    const cleanMobile = s.mobile.replace(/[^\d+]/g, "");
+    window.open(`https://wa.me/${cleanMobile}?text=${encodeURIComponent(message)}`, "_blank");
+  }
+};
+
+const getExpiryHighlightStatus = (expiryDate, today) => {
+  if (expiryDate < today) {
+    const days = getDaysDiff(expiryDate, today);
+    return `<span style="color: var(--accent-red); font-weight: 600;">Expired (${days} ${days === 1 ? 'Day' : 'Days'} Ago)</span>`;
+  } else if (expiryDate === today) {
+    return `<span style="color: var(--accent-purple); font-weight: 600;">Expires Today</span>`;
+  } else {
+    const days = getDaysDiff(today, expiryDate);
+    return `<span style="color: var(--text-secondary); font-weight: 600;">${days} ${days === 1 ? 'Day' : 'Days'} Left</span>`;
+  }
+};
+
 const loadPendingFeesModal = async () => {
   const students = await dbAPI.getStudents();
   const today = getTodayDateString();
@@ -903,7 +975,10 @@ const loadPendingFeesModal = async () => {
         <td>${s.mobile}</td>
         <td style="color: #dc2626; font-weight: 500;">${formatLocalDate(s.expiryDate)}</td>
         <td><span style="color: #334155; font-weight: 600;">${daysUnpaid} Days</span></td>
-        <td style="text-align: right;">
+        <td style="text-align: right; display: flex; align-items: center; justify-content: flex-end; gap: 8px;">
+          <button class="icon-btn btn-whatsapp-reminder" data-id="${s.id}" style="color: var(--accent-green); display: inline-flex; align-items: center; justify-content: center; padding: 4px;" title="Send WhatsApp Reminder">
+            <i data-lucide="message-circle" style="width: 18px; height: 18px;"></i>
+          </button>
           <button class="btn btn-primary btn-sm btn-renew-member" 
             data-id="${s.id}" 
             data-name="${s.name}" 
@@ -916,8 +991,19 @@ const loadPendingFeesModal = async () => {
     `;
   }).join("");
 
+  // Bind WhatsApp buttons
+  tbody.querySelectorAll(".btn-whatsapp-reminder").forEach((btn) => {
+    btn.onclick = (e) => {
+      const studentId = e.currentTarget.getAttribute("data-id");
+      const student = students.find((st) => st.id === studentId);
+      if (student) {
+        sendWhatsAppReminder(student);
+      }
+    };
+  });
+
   // Bind Renew/Mark as Paid buttons
-  document.querySelectorAll(".btn-renew-member").forEach((btn) => {
+  tbody.querySelectorAll(".btn-renew-member").forEach((btn) => {
     btn.onclick = (e) => {
       const studentId = e.currentTarget.getAttribute("data-id");
       const studentName = e.currentTarget.getAttribute("data-name");
@@ -947,6 +1033,101 @@ const loadPendingFeesModal = async () => {
       renewalDrawer.scrollIntoView({ behavior: "smooth" });
     };
   });
+
+  if (window.lucide) {
+    window.lucide.createIcons({ root: tbody });
+  }
+};
+
+const loadExpiringSoonModal = async () => {
+  const students = await dbAPI.getStudents();
+  const today = getTodayDateString();
+
+  // Filter expiring soon or already expired students (exclude Out students)
+  const expiringStudents = students.filter(
+    (s) => !s.isOut && (s.expiryDate < today || getDaysDiff(today, s.expiryDate) <= 7)
+  );
+
+  const tbody = document.getElementById("expiring-members-list");
+  if (expiringStudents.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="5" style="text-align: center; color: var(--text-muted); padding: 1.5rem;">No memberships expiring soon.</td></tr>`;
+    return;
+  }
+
+  tbody.innerHTML = expiringStudents.map((s) => {
+    const statusHighlight = getExpiryHighlightStatus(s.expiryDate, today);
+    return `
+      <tr>
+        <td style="font-weight: 600;">${s.name}</td>
+        <td>${s.mobile}</td>
+        <td>${formatLocalDate(s.expiryDate)}</td>
+        <td>${statusHighlight}</td>
+        <td style="text-align: right; display: flex; align-items: center; justify-content: flex-end; gap: 8px;">
+          <button class="icon-btn btn-whatsapp-reminder" data-id="${s.id}" style="color: var(--accent-green); display: inline-flex; align-items: center; justify-content: center; padding: 4px;" title="Send WhatsApp Reminder">
+            <i data-lucide="message-circle" style="width: 18px; height: 18px;"></i>
+          </button>
+          <button class="btn btn-primary btn-sm btn-renew-member-expiring" 
+            data-id="${s.id}" 
+            data-name="${s.name}" 
+            data-fee="${s.feeAmount || 1000}" 
+            data-months="${s.membershipMonths || 1}">
+            Mark Paid
+          </button>
+        </td>
+      </tr>
+    `;
+  }).join("");
+
+  // Bind WhatsApp buttons
+  tbody.querySelectorAll(".btn-whatsapp-reminder").forEach((btn) => {
+    btn.onclick = (e) => {
+      const studentId = e.currentTarget.getAttribute("data-id");
+      const student = students.find((st) => st.id === studentId);
+      if (student) {
+        sendWhatsAppReminder(student);
+      }
+    };
+  });
+
+  // Bind Renew/Mark as Paid buttons (Switching modals to trigger drawer)
+  tbody.querySelectorAll(".btn-renew-member-expiring").forEach((btn) => {
+    btn.onclick = async (e) => {
+      const studentId = e.currentTarget.getAttribute("data-id");
+      const studentName = e.currentTarget.getAttribute("data-name");
+      const baseFee = e.currentTarget.getAttribute("data-fee");
+      const baseMonths = e.currentTarget.getAttribute("data-months") || 1;
+
+      // Close expiring modal, open pending modal
+      document.getElementById("expiring-soon-modal").classList.remove("active");
+      await loadPendingFeesModal();
+      document.getElementById("pending-fees-modal").classList.add("active");
+
+      // Open drawer & populate fields in pending modal
+      const renewalDrawer = document.getElementById("renewal-drawer");
+      document.getElementById("renew-student-id").value = studentId;
+      const nameEl = document.getElementById("renew-student-name");
+      nameEl.innerText = studentName;
+      nameEl.setAttribute("data-name", studentName);
+      document.getElementById("renew-date").value = getTodayDateString();
+      document.getElementById("renew-months").value = baseMonths;
+      
+      const renewAmountInput = document.getElementById("renew-amount");
+      renewAmountInput.value = baseFee;
+      document.getElementById("renew-original-fee").value = baseFee;
+
+      document.getElementById("renew-months").onchange = (ev) => {
+        const factor = parseInt(ev.target.value) / (parseInt(baseMonths) || 1);
+        renewAmountInput.value = Math.round(parseFloat(baseFee) * factor);
+      };
+
+      renewalDrawer.style.display = "block";
+      renewalDrawer.scrollIntoView({ behavior: "smooth" });
+    };
+  });
+
+  if (window.lucide) {
+    window.lucide.createIcons({ root: tbody });
+  }
 };
 
 // Onboarding and Profile Verification Gate

@@ -240,6 +240,15 @@
               <span class="stat-value" id="stat-pending-fees">0</span>
             </div>
           </div>
+
+          <!-- Expiring Soon (Clickable) -->
+          <div class="stat-card clickable" id="card-expiring-soon" style="--card-accent: var(--accent-purple); --card-icon-bg: rgba(245, 120, 139, 0.08);">
+            <div class="stat-icon"><i data-lucide="clock"></i></div>
+            <div class="stat-details">
+              <span class="stat-label">Expiring Soon</span>
+              <span class="stat-value" id="stat-expiring-soon">0</span>
+            </div>
+          </div>
         </div>
 
         <!-- Profit/Loss Financial Row -->
@@ -398,7 +407,7 @@
 
               <!-- Initial Fee Amount -->
               <div class="form-group">
-                <label class="form-label" for="enroll-fee">Membership Fee (<span class="currency-label-symbol">$</span>)</label>
+                <label class="form-label" for="enroll-fee">Membership Fee (<span class="currency-label-symbol">₹</span>)</label>
                 <input class="form-input" type="number" id="enroll-fee" placeholder="1000" min="0" required>
               </div>
 
@@ -482,7 +491,7 @@
               </div>
               
               <div class="form-group">
-                <label class="form-label" for="expense-amount">Amount (<span class="currency-label-symbol">$</span>)</label>
+                <label class="form-label" for="expense-amount">Amount (<span class="currency-label-symbol">₹</span>)</label>
                 <input class="form-input" type="number" id="expense-amount" placeholder="500" min="0.01" step="any" required>
               </div>
               
@@ -554,7 +563,7 @@
                 <label class="form-label" for="settings-currency">System Currency</label>
                 <select class="form-select" id="settings-currency" required>
                   <option value="$">USD - Dollar ($)</option>
-                  <option value="₹">INR - Rupee (₹)</option>
+                  <option value="₹" selected>INR - Rupee (₹)</option>
                   <option value="€">EUR - Euro (€)</option>
                   <option value="£">GBP - Pound (£)</option>
                   <option value="¥">JPY/CNY - Yen/Yuan (¥)</option>
@@ -688,7 +697,7 @@
               </div>
 
               <div class="form-group">
-                <label class="form-label" for="renew-amount">Fee Collected (<span class="currency-label-symbol">$</span>)</label>
+                <label class="form-label" for="renew-amount">Fee Collected (<span class="currency-label-symbol">₹</span>)</label>
                 <input class="form-input" type="number" id="renew-amount" min="0" required>
               </div>
             </div>
@@ -721,6 +730,41 @@
       </div>
       <div class="modal-footer">
         <button class="btn btn-secondary" id="btn-close-pending-modal-footer">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== POPUP: EXPIRING SOON LIST ==================== -->
+  <div id="expiring-soon-modal" class="modal-overlay">
+    <div class="modal-container" style="max-width: 650px;">
+      <div class="modal-header">
+        <h3 class="modal-title">Expiring Soon (7 Days)</h3>
+        <button class="modal-close" id="btn-close-expiring-modal">
+          <i data-lucide="x"></i>
+        </button>
+      </div>
+      <div class="modal-body">
+        <div class="table-container">
+          <table class="custom-table">
+            <thead>
+              <tr>
+                <th>Name</th>
+                <th>Mobile</th>
+                <th>Expiry Date</th>
+                <th>Status</th>
+                <th style="text-align: right;">Action</th>
+              </tr>
+            </thead>
+            <tbody id="expiring-members-list">
+              <tr>
+                <td colspan="5" style="text-align: center; color: var(--text-muted); padding: 1.5rem;">No memberships expiring soon.</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" id="btn-close-expiring-modal-footer">Close</button>
       </div>
     </div>
   </div>
