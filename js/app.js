@@ -959,7 +959,7 @@ const sendWhatsAppReminder = async (s) => {
   const isExpired = s.expiryDate < today;
   const message = `Hi ${s.name}, this is a gentle reminder regarding your ${gymName} membership. Your fee of ${currencySymbol}${s.feeAmount || 1000} is pending, and your membership ${isExpired ? "has expired" : "is expiring soon"} on ${formatLocalDate(s.expiryDate)}. Please pay at your earliest convenience.`;
   
-  if (confirm(`Review drafted WhatsApp Message:\\n\\n"${message}"\\n\\nClick OK to confirm and send.`)) {
+  if (confirm(`Review drafted WhatsApp Message:\n\n"${message}"\n\nClick OK to confirm and send.`)) {
     // Strip non-numeric/non-plus characters from mobile
     const cleanMobile = s.mobile.replace(/[^\d+]/g, "");
     window.open(`https://wa.me/${cleanMobile}?text=${encodeURIComponent(message)}`, "_blank");
