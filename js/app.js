@@ -54,12 +54,24 @@ const toLocalDateString = (date) => {
   return `${y}-${m}-${d}`;
 };
 
-// Calculate membership expiry date: enrollment + duration in days
+// Calculate membership expiry date: enrollment + duration in calendar months
 const calcExpiryDate = (enrollDateStr, months) => {
   const date = new Date(`${enrollDateStr}T00:00:00`);
   const m = parseInt(months);
-  const days = m === 12 ? 365 : m * 30;
-  date.setDate(date.getDate() + days);
+  
+  // Store target day of the month
+  const targetDay = date.getDate();
+  
+  // Set day to 1 first to prevent overflow when changing month
+  date.setDate(1);
+  date.setMonth(date.getMonth() + m);
+  
+  // Find maximum days in the target month (e.g. 28, 29, 30, or 31)
+  const maxDays = new Date(date.getFullYear(), date.getMonth() + 1, 0).getDate();
+  
+  // Set day to target day, capped at max days of the month
+  date.setDate(Math.min(targetDay, maxDays));
+  
   return toLocalDateString(date);
 };
 
@@ -302,6 +314,7 @@ const loadRouteData = async (route) => {
         break;
       case "expenses":
         document.getElementById("expense-date").value = getTodayDateString();
+        document.getElementById("expense-date").setAttribute("min", getTodayDateString());
         await loadExpenses();
         break;
       case "settings":
@@ -347,12 +360,12 @@ const loadDashboard = async () => {
   const presentCount = attendance.filter((a) => a.status === "present").length;
   document.getElementById("stat-today-attendance").innerText = presentCount;
 
-  // 3. Pending Fee Count (expiryDate < today, exclude Out students)
-  const unpaidCount = students.filter((s) => !s.isOut && s.expiryDate < today).length;
+  // 3. Pending Fee Count (expiryDate < today or paymentStatus === "Unpaid", exclude Out students)
+  const unpaidCount = students.filter((s) => !s.isOut && (s.paymentStatus === "Unpaid" || s.expiryDate < today)).length;
   document.getElementById("stat-pending-fees").innerText = unpaidCount;
 
-  // Expiring Soon Count (expiryDate < today or expiring in next 7 days, exclude Out students)
-  const expiringCount = students.filter((s) => !s.isOut && (s.expiryDate < today || getDaysDiff(today, s.expiryDate) <= 7)).length;
+  // Expiring Soon Count (expiring in next 7 days, exclude Out students and unpaid students)
+  const expiringCount = students.filter((s) => !s.isOut && s.paymentStatus !== "Unpaid" && s.expiryDate >= today && getDaysDiff(today, s.expiryDate) <= 7).length;
   const expiringSoonEl = document.getElementById("stat-expiring-soon");
   if (expiringSoonEl) {
     expiringSoonEl.innerText = expiringCount;
@@ -463,9 +476,9 @@ const renderAttendanceList = (students, attendance) => {
 
   tbody.innerHTML = students.map((s) => {
     // Determine status badge
-    const isExpired = s.expiryDate < today;
+    const isExpired = s.paymentStatus === "Unpaid" || s.expiryDate < today;
     const statusBadge = isExpired
-      ? `<span class="badge badge-danger">Expired</span>`
+      ? `<span class="badge badge-danger">Unpaid</span>`
       : `<span class="badge badge-success">Active</span>`;
     
     // Check attendance check-in status
@@ -607,7 +620,7 @@ const loadEnrollDirectory = async () => {
       const attendanceRateText = `${presentCount} / ${elapsedDays}`;
 
       // Payment Status Badge
-      const isPaid = s.expiryDate >= today;
+      const isPaid = s.paymentStatus !== "Unpaid" && s.expiryDate >= today;
       const paymentBadge = isPaid
         ? `<span class="badge badge-success">Paid</span>`
         : `<span class="badge badge-danger">Unpaid</span>`;
@@ -616,7 +629,7 @@ const loadEnrollDirectory = async () => {
       let statusBadge = "";
       if (s.isOut) {
         statusBadge = `<span class="badge badge-danger">Out</span>`;
-      } else if (s.expiryDate < today) {
+      } else if (s.paymentStatus === "Unpaid" || s.expiryDate < today) {
         statusBadge = `<span class="badge badge-warning">Unpaid</span>`;
       } else {
         statusBadge = `<span class="badge badge-success">Active</span>`;
@@ -728,14 +741,8 @@ const setupFormHandlers = () => {
       }
 
       let expiryDate;
-      if (paymentStatus === "Unpaid") {
-        const yesterday = new Date(`${enrollDate}T00:00:00`);
-        yesterday.setDate(yesterday.getDate() - 1);
-        expiryDate = toLocalDateString(yesterday);
-      } else {
-        const expiryInput = document.getElementById("enroll-expiry");
-        expiryDate = expiryInput && expiryInput.value ? expiryInput.value : calcExpiryDate(enrollDate, months);
-      }
+      const expiryInput = document.getElementById("enroll-expiry");
+      expiryDate = expiryInput && expiryInput.value ? expiryInput.value : calcExpiryDate(enrollDate, months);
 
       try {
         // 1. Save student details
@@ -779,6 +786,13 @@ const setupFormHandlers = () => {
   expenseForm.addEventListener("submit", async (e) => {
     e.preventDefault();
     const date = document.getElementById("expense-date").value;
+    
+    const today = getTodayDateString();
+    if (date && date < today) {
+      showToast("Expense date cannot be a past date.", "danger");
+      return;
+    }
+
     const amount = document.getElementById("expense-amount").value;
     const category = document.getElementById("expense-category").value;
     const description = document.getElementById("expense-desc").value.trim();
@@ -794,6 +808,7 @@ const setupFormHandlers = () => {
       showToast("Expense logged successfully.", "success");
       expenseForm.reset();
       document.getElementById("expense-date").value = getTodayDateString();
+      document.getElementById("expense-date").setAttribute("min", getTodayDateString());
       await loadExpenses();
     } catch (err) {
       showToast("Failed to log expense.", "danger");
@@ -893,6 +908,13 @@ const setupModalHandlers = () => {
     const studentId = document.getElementById("renew-student-id").value;
     const studentName = document.getElementById("renew-student-name").getAttribute("data-name") || "Student";
     const paymentDate = document.getElementById("renew-date").value;
+    
+    const today = getTodayDateString();
+    if (paymentDate && paymentDate < today) {
+      showToast("Payment date cannot be a past date.", "danger");
+      return;
+    }
+
     const paymentMethod = document.getElementById("renew-method").value;
     const renewMonths = document.getElementById("renew-months").value;
     const amountCollected = parseFloat(document.getElementById("renew-amount").value) || 0;
@@ -930,12 +952,14 @@ const setupModalHandlers = () => {
   });
 };
 
-const sendWhatsAppReminder = (s) => {
+const sendWhatsAppReminder = async (s) => {
+  const profile = await dbAPI.getGymProfile();
+  const gymName = (profile && profile.gymName) ? profile.gymName : "ApexGym";
   const today = getTodayDateString();
   const isExpired = s.expiryDate < today;
-  const message = `Hi ${s.name}, this is a gentle reminder regarding your Taekwondo Academy membership. Your fee of ${currencySymbol}${s.feeAmount || 1000} is pending, and your membership ${isExpired ? "has expired" : "is expiring soon"} on ${formatLocalDate(s.expiryDate)}. Please pay at your earliest convenience.`;
+  const message = `Hi ${s.name}, this is a gentle reminder regarding your ${gymName} membership. Your fee of ${currencySymbol}${s.feeAmount || 1000} is pending, and your membership ${isExpired ? "has expired" : "is expiring soon"} on ${formatLocalDate(s.expiryDate)}. Please pay at your earliest convenience.`;
   
-  if (confirm(`Review drafted WhatsApp Message:\n\n"${message}"\n\nClick OK to confirm and send.`)) {
+  if (confirm(`Review drafted WhatsApp Message:\\n\\n"${message}"\\n\\nClick OK to confirm and send.`)) {
     // Strip non-numeric/non-plus characters from mobile
     const cleanMobile = s.mobile.replace(/[^\d+]/g, "");
     window.open(`https://wa.me/${cleanMobile}?text=${encodeURIComponent(message)}`, "_blank");
@@ -958,8 +982,10 @@ const loadPendingFeesModal = async () => {
   const students = await dbAPI.getStudents();
   const today = getTodayDateString();
 
-  // Filter expired students (exclude Out students)
-  const unpaidStudents = students.filter((s) => !s.isOut && s.expiryDate < today);
+  // Filter unpaid students or expired students (exclude Out students)
+  const unpaidStudents = students.filter(
+    (s) => !s.isOut && (s.paymentStatus === "Unpaid" || s.expiryDate < today)
+  );
 
   const tbody = document.getElementById("unpaid-members-list");
   if (unpaidStudents.length === 0) {
@@ -968,13 +994,16 @@ const loadPendingFeesModal = async () => {
   }
 
   tbody.innerHTML = unpaidStudents.map((s) => {
-    const daysUnpaid = getDaysDiff(s.expiryDate, today);
+    const isUnpaidRegistration = s.paymentStatus === "Unpaid";
+    // If registered as unpaid and not yet expired, they are unpaid since enrollment; otherwise since expiry date
+    const unpaidSinceDate = (isUnpaidRegistration && s.expiryDate >= today) ? s.enrollmentDate : s.expiryDate;
+    const daysUnpaid = getDaysDiff(unpaidSinceDate, today);
     return `
       <tr>
         <td style="font-weight: 600;">${s.name}</td>
         <td>${s.mobile}</td>
-        <td style="color: #dc2626; font-weight: 500;">${formatLocalDate(s.expiryDate)}</td>
-        <td><span style="color: #334155; font-weight: 600;">${daysUnpaid} Days</span></td>
+        <td style="color: #dc2626; font-weight: 500;">${formatLocalDate(unpaidSinceDate)}</td>
+        <td><span style="color: #334155; font-weight: 600;">${daysUnpaid} ${daysUnpaid === 1 ? 'Day' : 'Days'}</span></td>
         <td style="text-align: right; display: flex; align-items: center; justify-content: flex-end; gap: 8px;">
           <button class="icon-btn btn-whatsapp-reminder" data-id="${s.id}" style="color: var(--accent-green); display: inline-flex; align-items: center; justify-content: center; padding: 4px;" title="Send WhatsApp Reminder">
             <i data-lucide="message-circle" style="width: 18px; height: 18px;"></i>
@@ -1017,6 +1046,7 @@ const loadPendingFeesModal = async () => {
       nameEl.innerText = studentName;
       nameEl.setAttribute("data-name", studentName);
       document.getElementById("renew-date").value = getTodayDateString();
+      document.getElementById("renew-date").setAttribute("min", getTodayDateString());
       document.getElementById("renew-months").value = baseMonths;
       
       const renewAmountInput = document.getElementById("renew-amount");
@@ -1043,9 +1073,9 @@ const loadExpiringSoonModal = async () => {
   const students = await dbAPI.getStudents();
   const today = getTodayDateString();
 
-  // Filter expiring soon or already expired students (exclude Out students)
+  // Filter expiring soon students (exclude Out students and unpaid students)
   const expiringStudents = students.filter(
-    (s) => !s.isOut && (s.expiryDate < today || getDaysDiff(today, s.expiryDate) <= 7)
+    (s) => !s.isOut && s.paymentStatus !== "Unpaid" && s.expiryDate >= today && getDaysDiff(today, s.expiryDate) <= 7
   );
 
   const tbody = document.getElementById("expiring-members-list");
@@ -1109,6 +1139,7 @@ const loadExpiringSoonModal = async () => {
       nameEl.innerText = studentName;
       nameEl.setAttribute("data-name", studentName);
       document.getElementById("renew-date").value = getTodayDateString();
+      document.getElementById("renew-date").setAttribute("min", getTodayDateString());
       document.getElementById("renew-months").value = baseMonths;
       
       const renewAmountInput = document.getElementById("renew-amount");
@@ -1248,6 +1279,32 @@ const setupSettingsHandlers = () => {
   }
 };
 
+const enforceDateRestrictions = () => {
+  const dateFields = [
+    { id: "enroll-date", label: "Enrollment date" },
+    { id: "expense-date", label: "Expense date" },
+    { id: "renew-date", label: "Payment date" }
+  ];
+
+  dateFields.forEach(({ id, label }) => {
+    const field = document.getElementById(id);
+    if (!field) return;
+
+    field.setAttribute("min", getTodayDateString());
+
+    field.addEventListener("change", (e) => {
+      const today = getTodayDateString();
+      if (e.target.value && e.target.value < today) {
+        showToast(`${label} cannot be a past date.`, "danger");
+        e.target.value = today;
+        if (id === "enroll-date") {
+          updateEnrollExpiry();
+        }
+      }
+    });
+  });
+};
+
 const enforceNumericInputs = () => {
   // Select phone/mobile fields that must contain ONLY digits
   const integerFields = [
@@ -1380,6 +1437,7 @@ const initApp = () => {
   setupSettingsHandlers();
   updateDOMCurrencySymbols();
   enforceNumericInputs();
+  enforceDateRestrictions();
 };
 
 if (document.readyState === "loading") {
