@@ -262,9 +262,23 @@ const setupNavigation = () => {
   window.addEventListener("hashchange", handleRouting);
 };
 
-const handleRouting = () => {
+const handleRouting = async () => {
   const hash = window.location.hash.replace("#", "") || "dashboard";
   currentRoute = hash;
+
+  // Loophole check: verify if the gym profile onboarding has been completed
+  const profile = await dbAPI.getGymProfile();
+  if (!profile) {
+    const onboardingModal = document.getElementById("onboarding-modal");
+    if (onboardingModal) {
+      onboardingModal.classList.add("active");
+    }
+    // Block routing by resetting URL hash to dashboard
+    if (window.location.hash !== "" && window.location.hash !== "#dashboard") {
+      window.location.hash = "#dashboard";
+    }
+    return;
+  }
 
   // Active navigation items (Desktop Sidebar / Mobile Drawer)
   document.querySelectorAll(".sidebar .nav-item").forEach((el) => {
@@ -651,6 +665,13 @@ const loadEnrollDirectory = async () => {
         `;
       }
 
+      // Report download button
+      const reportBtn = `
+        <button class="icon-btn btn-download-report" data-id="${s.id}" style="color: var(--accent-cyan); display: inline-flex; align-items: center; justify-content: center; padding: 4px; margin-right: 8px;" title="Download Report">
+          <i data-lucide="file-text" style="width: 18px; height: 18px;"></i>
+        </button>
+      `;
+
       return `
         <tr>
           <td style="font-weight: 500;">${s.name}</td>
@@ -660,7 +681,10 @@ const loadEnrollDirectory = async () => {
           <td>${attendanceRateText}</td>
           <td>${paymentBadge}</td>
           <td>${statusBadge}</td>
-          <td style="text-align: right;">${actionBtn}</td>
+          <td style="text-align: right; display: flex; align-items: center; justify-content: flex-end; gap: 8px;">
+            ${reportBtn}
+            ${actionBtn}
+          </td>
         </tr>
       `;
     }).join("");
@@ -688,6 +712,18 @@ const loadEnrollDirectory = async () => {
         }
       };
     });
+
+    // Bind Download Report Buttons
+    tbody.querySelectorAll(".btn-download-report").forEach((btn) => {
+      btn.onclick = async (e) => {
+        const studentId = e.currentTarget.getAttribute("data-id");
+        await downloadStudentReport(studentId);
+      };
+    });
+
+    if (window.lucide) {
+      window.lucide.createIcons({ root: tbody });
+    }
   };
 
   // Bind live search & filter events with debounce
@@ -964,6 +1000,483 @@ const sendWhatsAppReminder = async (s) => {
     const cleanMobile = s.mobile.replace(/[^\d+]/g, "");
     window.open(`https://wa.me/${cleanMobile}?text=${encodeURIComponent(message)}`, "_blank");
   }
+};
+
+const downloadStudentReport = async (studentId) => {
+  let student = studentsList.find((s) => s.id === studentId);
+  if (!student) {
+    const students = await dbAPI.getStudents();
+    student = students.find((s) => s.id === studentId);
+  }
+  
+  if (!student) {
+    showToast("Student records not found.", "danger");
+    return;
+  }
+
+  const profile = await dbAPI.getGymProfile();
+  const gymName = (profile && profile.gymName) ? profile.gymName : "ApexGym";
+  const gymAddress = (profile && profile.address) ? profile.address : "";
+  const gymPhone = (profile && profile.phone) ? profile.phone : "";
+  const gymOwner = (profile && profile.ownerName) ? profile.ownerName : "";
+
+  const allAttendance = await dbAPI.getAllAttendance();
+  const studentAttendance = allAttendance
+    .filter((a) => a.studentId === studentId)
+    .sort((a, b) => new Date(b.date) - new Date(a.date));
+
+  const printWindow = window.open("", "_blank");
+  if (!printWindow) {
+    showToast("Please allow popups to generate reports.", "danger");
+    return;
+  }
+
+  // Calculate statistics
+  const presentCount = studentAttendance.filter((a) => a.status === "present").length;
+  const elapsedDays = Math.max(1, getDaysDiff(student.enrollmentDate || student.createdAt, getTodayDateString()) + 1);
+  const attendanceRate = ((presentCount / elapsedDays) * 100).toFixed(0);
+
+  // Calculate monthly attendance (current calendar month)
+  const monthlyPresentCount = studentAttendance.filter(
+    (a) => a.status === "present" && isCurrentMonth(a.date)
+  ).length;
+
+  // Membership status calculation
+  const today = getTodayDateString();
+  const isActive = student.paymentStatus !== "Unpaid" && student.expiryDate >= today && !student.isOut;
+  const statusText = isActive ? "Active" : student.isOut ? "Out/Inactive" : "Unpaid/Expired";
+
+  // Generate monthly aggregated rows for the attendance table
+  const monthlyGroups = {};
+  studentAttendance.forEach((a) => {
+    // a.date is YYYY-MM-DD
+    const dateObj = new Date(`${a.date}T00:00:00`);
+    const monthName = dateObj.toLocaleString("default", { month: "long" }); // e.g. "July"
+    const year = dateObj.getFullYear(); // e.g. 2026
+    const groupKey = `${monthName} ${year}`; // e.g. "July 2026"
+    
+    if (!monthlyGroups[groupKey]) {
+      monthlyGroups[groupKey] = {
+        present: 0,
+        total: 0
+      };
+    }
+    
+    monthlyGroups[groupKey].total++;
+    if (a.status === "present") {
+      monthlyGroups[groupKey].present++;
+    }
+  });
+
+  let attendanceRows = "";
+  const groupKeys = Object.keys(monthlyGroups);
+  if (groupKeys.length === 0) {
+    attendanceRows = `
+      <tr>
+        <td colspan="2" style="text-align: center; color: #94a3b8; padding: 1.5rem; font-style: italic;">
+          No attendance records logged yet.
+        </td>
+      </tr>
+    `;
+  } else {
+    attendanceRows = groupKeys.map((key) => {
+      const stats = monthlyGroups[key];
+      const rate = stats.total > 0 ? ((stats.present / stats.total) * 100).toFixed(0) : 0;
+      return `
+        <tr>
+          <td style="padding: 0.85rem 1rem; border-bottom: 1px solid #f1f5f9; font-weight: 500;">${key}</td>
+          <td style="padding: 0.85rem 1rem; border-bottom: 1px solid #f1f5f9; text-align: right; font-weight: 600; color: var(--primary-color);">
+            ${stats.present} / ${stats.total} Days <span style="color: var(--text-muted); font-size: 0.85rem; font-weight: 400; margin-left: 8px;">(${rate}%)</span>
+          </td>
+        </tr>
+      `;
+    }).join("");
+  }
+
+  const todayStr = formatLocalDate(getTodayDateString());
+
+  // HTML content of the report
+  const htmlContent = `
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Membership Report - ${student.name}</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --primary-color: #0f172a;
+      --accent-color: #FF6A1C;
+      --text-main: #334155;
+      --text-muted: #64748b;
+      --border-color: #e2e8f0;
+      --bg-light: #f8fafc;
+    }
+    
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    
+    body {
+      font-family: 'Inter', sans-serif;
+      color: var(--text-main);
+      background-color: #ffffff;
+      line-height: 1.5;
+      padding: 0;
+    }
+
+    /* Print utility banner */
+    .utility-banner {
+      background: #1e293b;
+      color: #ffffff;
+      padding: 1rem 2rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1);
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      font-family: 'Outfit', sans-serif;
+    }
+    
+    .utility-title {
+      font-size: 1rem;
+      font-weight: 600;
+    }
+    
+    .utility-title span {
+      color: var(--accent-color);
+    }
+    
+    .btn-print {
+      background: var(--accent-color);
+      color: white;
+      border: none;
+      padding: 0.6rem 1.2rem;
+      font-size: 0.9rem;
+      font-weight: 600;
+      border-radius: 8px;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      transition: all 0.2s ease;
+      box-shadow: 0 4px 12px rgba(255, 106, 28, 0.2);
+    }
+    
+    .btn-print:hover {
+      background: #e0530f;
+      transform: translateY(-1px);
+    }
+
+    /* Report Container */
+    .report-container {
+      max-width: 800px;
+      margin: 2.5rem auto;
+      padding: 3rem;
+      border: 1px solid var(--border-color);
+      border-radius: 16px;
+      box-shadow: 0 10px 25px -5px rgb(0 0 0 / 0.05);
+      background: #ffffff;
+      position: relative;
+    }
+
+    /* Header */
+    .report-header {
+      text-align: center;
+      margin-bottom: 2.5rem;
+      position: relative;
+    }
+    
+    .gym-name {
+      font-family: 'Outfit', sans-serif;
+      font-size: 2.25rem;
+      font-weight: 800;
+      color: var(--primary-color);
+      letter-spacing: -0.5px;
+      margin-bottom: 0.25rem;
+      text-transform: uppercase;
+      text-align: center;
+    }
+    
+    .powered-by {
+      font-family: 'Outfit', sans-serif;
+      font-size: 0.75rem;
+      color: var(--text-muted);
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      font-weight: 600;
+      margin-bottom: 1.5rem;
+      display: block;
+      text-align: center;
+    }
+
+    .powered-by span {
+      color: var(--accent-color);
+      font-weight: 800;
+    }
+    
+    .report-title-badge {
+      display: inline-block;
+      font-size: 0.8rem;
+      font-weight: 700;
+      letter-spacing: 1.5px;
+      text-transform: uppercase;
+      color: var(--accent-color);
+      background: rgba(255, 106, 28, 0.06);
+      padding: 6px 16px;
+      border-radius: 30px;
+      border: 1px dashed rgba(255, 106, 28, 0.3);
+      margin-bottom: 1rem;
+    }
+    
+    .divider {
+      height: 1px;
+      background: linear-gradient(to right, transparent, var(--border-color) 20%, var(--border-color) 80%, transparent);
+      width: 100%;
+      margin: 1.5rem 0;
+    }
+
+    /* Meta Info */
+    .meta-row {
+      display: flex;
+      justify-content: space-between;
+      font-size: 0.85rem;
+      color: var(--text-muted);
+      margin-bottom: 2rem;
+      padding: 0 0.5rem;
+    }
+
+    /* Profile Grid */
+    .profile-section {
+      background: var(--bg-light);
+      border-radius: 12px;
+      border: 1px solid var(--border-color);
+      padding: 1.75rem;
+      margin-bottom: 2.5rem;
+    }
+
+    .profile-title {
+      font-family: 'Outfit', sans-serif;
+      font-size: 1.15rem;
+      font-weight: 700;
+      color: var(--primary-color);
+      margin-bottom: 1.25rem;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    
+    .profile-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1.25rem;
+    }
+    
+    .profile-item {
+      display: flex;
+      flex-direction: column;
+    }
+    
+    .profile-label {
+      font-size: 0.75rem;
+      text-transform: uppercase;
+      color: var(--text-muted);
+      font-weight: 600;
+      letter-spacing: 0.5px;
+      margin-bottom: 0.25rem;
+    }
+    
+    .profile-value {
+      font-size: 0.95rem;
+      color: var(--primary-color);
+      font-weight: 600;
+    }
+
+    /* Attendance Section */
+    .attendance-section {
+      margin-bottom: 2rem;
+    }
+    
+    .attendance-title {
+      font-family: 'Outfit', sans-serif;
+      font-size: 1.15rem;
+      font-weight: 700;
+      color: var(--primary-color);
+      margin-bottom: 1.25rem;
+      padding-bottom: 0.5rem;
+      border-bottom: 2px solid var(--border-color);
+    }
+    
+    .attendance-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.9rem;
+    }
+    
+    .attendance-table th {
+      padding: 0.75rem 1rem;
+      background: var(--bg-light);
+      color: var(--text-muted);
+      font-weight: 600;
+      text-transform: uppercase;
+      font-size: 0.75rem;
+      letter-spacing: 0.5px;
+      border-bottom: 1px solid var(--border-color);
+      text-align: left;
+    }
+    
+    .attendance-table th:last-child {
+      text-align: right;
+    }
+
+    .attendance-table td {
+      padding: 0.85rem 1rem;
+      border-bottom: 1px solid #f1f5f9;
+    }
+    
+    .attendance-table tr:hover td {
+      background: #fdfdfd;
+    }
+
+    /* Classy Footer decoration */
+    .report-footer {
+      text-align: center;
+      margin-top: 4rem;
+      padding-top: 1.5rem;
+      border-top: 1px solid var(--border-color);
+      font-size: 0.75rem;
+      color: var(--text-muted);
+      font-family: 'Outfit', sans-serif;
+      letter-spacing: 1px;
+    }
+
+    /* Printing rules */
+    @media print {
+      body {
+        background: #ffffff;
+      }
+      .utility-banner {
+        display: none !important;
+      }
+      .report-container {
+        margin: 0;
+        padding: 0;
+        border: none;
+        box-shadow: none;
+        max-width: 100%;
+      }
+      .btn-print {
+        display: none !important;
+      }
+      @page {
+        margin: 1.5cm;
+      }
+    }
+  </style>
+</head>
+<body>
+
+  <div class="utility-banner">
+    <div class="utility-title">ApexGYM Report <span>System</span></div>
+    <button class="btn-print" onclick="window.print()">
+      <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: middle;"><path d="M6 9V2h12v7"></path><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path><rect x="6" y="14" width="12" height="8"></rect></svg>
+      Print / Save as PDF
+    </button>
+  </div>
+
+  <div class="report-container">
+    <div class="report-header">
+      <h1 class="gym-name">${gymName}</h1>
+      <span class="powered-by">powered by <span>ApexGYM</span></span>
+      <div class="report-title-badge">Membership & Attendance Report</div>
+      <div class="divider"></div>
+    </div>
+    
+    <div class="meta-row">
+      <div><strong>Location:</strong> ${gymAddress || 'N/A'}</div>
+      <div><strong>Generated:</strong> ${todayStr}</div>
+    </div>
+    
+    <div class="profile-section">
+      <h2 class="profile-title">
+        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: text-bottom; margin-right: 4px; color: var(--accent-color);"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
+        Member Profile Details
+      </h2>
+      <div class="profile-grid">
+        <div class="profile-item">
+          <span class="profile-label">Student Name</span>
+          <span class="profile-value">${student.name}</span>
+        </div>
+        <div class="profile-item">
+          <span class="profile-label">Mobile Number</span>
+          <span class="profile-value">${student.mobile}</span>
+        </div>
+        <div class="profile-item">
+          <span class="profile-label">Enrollment Date</span>
+          <span class="profile-value">${formatLocalDate(student.enrollmentDate)}</span>
+        </div>
+        <div class="profile-item">
+          <span class="profile-label">Membership Duration</span>
+          <span class="profile-value">${student.membershipMonths} Month${student.membershipMonths > 1 ? 's' : ''}</span>
+        </div>
+        <div class="profile-item">
+          <span class="profile-label">Expiry Date</span>
+          <span class="profile-value">${formatLocalDate(student.expiryDate)}</span>
+        </div>
+        <div class="profile-item">
+          <span class="profile-label">Monthly Attendance</span>
+          <span class="profile-value">${monthlyPresentCount} / 30 Days</span>
+        </div>
+        <div class="profile-item">
+          <span class="profile-label">Attendance Rate</span>
+          <span class="profile-value">${presentCount} Days Present (${attendanceRate}%)</span>
+        </div>
+        <div class="profile-item">
+          <span class="profile-label">Membership Status</span>
+          <span class="profile-value" style="color: ${isActive ? '#10b981' : '#ef4444'};">${statusText}</span>
+        </div>
+      </div>
+    </div>
+    
+    <div class="attendance-section">
+      <h2 class="attendance-title">Monthly Attendance Summary</h2>
+      <table class="attendance-table">
+        <thead>
+          <tr>
+            <th>Month</th>
+            <th style="text-align: right;">Presents / Total Logged</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${attendanceRows}
+        </tbody>
+      </table>
+    </div>
+    
+    <div class="report-footer">
+      Generated by ${gymName}
+    </div>
+  </div>
+
+  <script>
+    window.addEventListener('load', () => {
+      setTimeout(() => {
+        window.print();
+      }, 500);
+    });
+  </script>
+</body>
+</html>
+  `;
+
+  printWindow.document.open();
+  printWindow.document.write(htmlContent);
+  printWindow.document.close();
 };
 
 const getExpiryHighlightStatus = (expiryDate, today) => {

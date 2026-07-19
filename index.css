@@ -683,6 +683,7 @@ body {
   display: inline-block;
   width: 48px;
   height: 26px;
+  vertical-align: middle;
 }
 
 .switch input {
@@ -698,7 +699,7 @@ body {
   left: 0;
   right: 0;
   bottom: 0;
-  background-color: rgba(255, 255, 255, 0.1);
+  background-color: rgba(15, 23, 42, 0.08); /* distinct soft grey background */
   border: 1px solid var(--border-light);
   transition: background-color 0.2s ease, border-color 0.2s ease;
   border-radius: 34px;
@@ -710,19 +711,20 @@ body {
   height: 18px;
   width: 18px;
   left: 3px;
-  bottom: 3px;
+  bottom: 3.5px;
   background-color: white;
   transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1);
   border-radius: 50%;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.15); /* added shadow to make knob pop */
 }
 
 input:checked + .slider {
-  background-color: var(--accent-cyan);
-  border-color: rgba(0, 242, 254, 0.3);
+  background-color: var(--accent-green) !important; /* checked is green */
+  border-color: rgba(16, 185, 129, 0.2);
 }
 
 input:checked + .slider:before {
-  transform: translateX(22px);
+  transform: translateX(24px); /* move to the right */
   background-color: #ffffff;
 }
 
